@@ -1,0 +1,33 @@
+name: Build and publish pandapipes to PyPI and GitLab
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-release-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up variables
+        run: echo "RELEASE_TAG=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #4.22
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e779db74266a80753577425b0f4ee823649f251d #v3.2.3
+        with:
+          version: "0.6.x"
+          enable-cache: true
+
+      - name: Build net_index_tools
+        run: uv build
+
+      - name: Publish to GitLab PyPI
+        run: |
+          uv publish --publish-url ${{ secrets.INDEX_URL }} --trusted-publishing never --username ${{ secrets.INDEX_USERNAME }} --password ${{ secrets.INDEX_PW }}
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@1beeb572c19a9242f4361f4cee78f8e0d9aec5df # v2.7.0
+        with:
+          file_glob: true
+          file: dist/*.whl
+          tag: ${{github.event.release.tag_name}}
