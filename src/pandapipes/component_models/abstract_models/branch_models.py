@@ -5,7 +5,12 @@
 import numpy as np
 
 from pandapipes.component_models.abstract_models.base_component import Component
-from pandapipes.idx_branch import MDOTINIT, branch_cols, TEXT, FLOW_RETURN_CONNECT
+from pandapipes.idx_branch import (
+    MDOTINIT,
+    branch_cols,
+    TEXT,
+    FLOW_RETURN_CONNECT,
+)
 from pandapipes.pf.pipeflow_setup import get_net_option
 from pandapipes.pf.pipeflow_setup import get_table_number, get_lookup
 
