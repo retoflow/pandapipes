@@ -41,7 +41,7 @@ default_options = {"friction_model": "nikuradse", "tol_p": 1e-5, "tol_m": 1e-5,
                    "max_iter_colebrook": 10, "only_update_hydraulic_matrix": False,
                    "reuse_internal_data": False, "use_numba": True,
                    "quit_on_inconsistency_connectivity": False, "calc_compression_power": True,
-                   "transient": False, "simulation_time_step": None, "dt": 60}
+                   "transient": False, "simulation_time_step": 0, "dt": 60}
 
 
 def get_net_option(net, option_name):
@@ -168,7 +168,7 @@ def get_lookup(net, pit_type="node", lookup_type="index"):
     lookup_type = lookup_type.lower()
     all_lookup_types = ["index", "table", "from_to", "active_hydraulics", "active_heat_transfer",
                         "length", "from_to_active_hydraulics", "from_to_active_heat_transfer",
-                        "index_active_hydraulics", "index_active_heat_transfer"]
+                        "index_active_hydraulics", "index_active_heat_transfer", "zero_flow"]
     if lookup_type not in all_lookup_types:
         type_names = "', '".join(all_lookup_types)
         logger.error("No lookup type '%s' exists. Please choose one of '%s'."
@@ -526,6 +526,8 @@ def identify_active_nodes_branches(net, hydraulic=True):
             nodes_connected = node_pit[:, ACTIVE_ND].astype(np.bool_)
             branches_connected = branch_pit[:, ACTIVE_BR].astype(np.bool_)
     else:
+        fn = branch_pit[:, FROM_NODE].astype(np.int32)
+        tn = branch_pit[:, TO_NODE].astype(np.int32)
         # connectivity check for heat simulation (needs to consider branches with 0 velocity as
         # well)
         if get_net_option(net, "check_connectivity"):
@@ -537,18 +539,37 @@ def identify_active_nodes_branches(net, hydraulic=True):
             # rest of the network wrt. flow can be identified by a more performant sum_by_group_call
             # check for branches that are not traversed (for temperature calculation, this means
             # that they are "out of service")
-            branches_connected = get_lookup(net, "branch", "active_hydraulics") \
-                                 & branches_connected_flow(branch_pit)
-            fn = branch_pit[:, FROM_NODE].astype(np.int32)
-            tn = branch_pit[:, TO_NODE].astype(np.int32)
+
+            if get_net_option(net, "transient"):
+                branches_connected = np.copy(get_lookup(net, "branch", "active_hydraulics"))
+                nodes_connected = np.copy(get_lookup(net, "node", "active_hydraulics"))
+            else:
+                branches_connected = get_lookup(
+                    net, "branch", "active_hydraulics"
+                ) & branches_connected_flow(branch_pit)
+                fn_tn, flow = _sum_by_group(
+                    get_net_option(net, "use_numba"),
+                    np.concatenate([fn, tn]),
+                    np.concatenate([branches_connected, branches_connected]).astype(
+                        np.int32
+                    ),
+                )
+                nodes_connected = np.copy(get_lookup(net, "node", "active_hydraulics"))
+                # set nodes oos that are not connected to any branches with flow > 0 (0.1 is arbitrary
+                # here, any value between 0 and 1 should work, excluding 0 and 1)
+                nodes_connected[fn_tn] = nodes_connected[fn_tn] & (flow > 0.1)
+
+        if get_net_option(net, "transient"):
+            branches_zero = branches_zero_flow(branch_pit) & branches_connected
             fn_tn, flow = _sum_by_group(
-                get_net_option(net, "use_numba"), np.concatenate([fn, tn]),
-                np.concatenate([branches_connected, branches_connected]).astype(np.int32)
+                get_net_option(net, "use_numba"),
+                np.concatenate([fn, tn]),
+                np.concatenate([branches_zero, branches_zero]).astype(np.int32),
             )
-            nodes_connected = np.copy(get_lookup(net, "node", "active_hydraulics"))
-            # set nodes oos that are not connected to any branches with flow > 0 (0.1 is arbitrary
-            # here, any value between 0 and 1 should work, excluding 0 and 1)
-            nodes_connected[fn_tn] = nodes_connected[fn_tn] & (flow > 0.1)
+            nodes_zero = np.copy(nodes_connected)
+            nodes_zero[fn_tn] = nodes_zero[fn_tn] & (flow > 0.1)
+            net["_lookups"]["node_zero_flow"] = nodes_zero
+            net["_lookups"]["branch_zero_flow"] = branches_zero
     mode = "hydraulics" if hydraulic else "heat_transfer"
     if np.all(~nodes_connected):
         mode = 'hydraulic' if hydraulic else 'heat transfer'
@@ -571,6 +592,20 @@ def branches_connected_flow(branch_pit):
     # TODO: is this formulation correct or could there be any caveats?
     return ~np.isnan(branch_pit[:, MDOTINIT]) \
         & ~np.isclose(branch_pit[:, MDOTINIT], 0, rtol=1e-10, atol=1e-10)
+
+
+def branches_zero_flow(branch_pit):
+    """
+    Simple function to identify branches with flow based on the calculated velocity.
+
+    :param branch_pit: The pandapipes internal table of the network (including hydraulics results)
+    :type branch_pit: np.array
+    :return: branches_connected_flow - lookup array if branch is connected wrt. flow
+    :rtype: np.array
+    """
+    # TODO: is this formulation correct or could there be any caveats?
+    return ~np.isnan(branch_pit[:, MDOTINIT]) \
+        & np.isclose(branch_pit[:, MDOTINIT], 0, rtol=1e-10, atol=1e-10)
 
 
 def check_connectivity(net, branch_pit, node_pit, mode="hydraulics"):
@@ -611,8 +646,11 @@ def check_connectivity(net, branch_pit, node_pit, mode="hydraulics"):
         active_node_lookup = node_pit[:, ACTIVE_ND].astype(np.bool_)
         slacks = np.where((node_pit[:, NODE_TYPE] == P) & active_node_lookup)[0]
     else:
-        active_branch_lookup = branches_connected_flow(branch_pit) \
-                               & get_lookup(net, "branch", "active_hydraulics")
+        if get_net_option(net, "transient"):
+            active_branch_lookup = get_lookup(net, "branch", "active_hydraulics")
+        else:
+            active_branch_lookup = branches_connected_flow(branch_pit) \
+                                   & get_lookup(net, "branch", "active_hydraulics")
         active_node_lookup = node_pit[:, ACTIVE_ND].astype(np.bool_) \
                              & get_lookup(net, "node", "active_hydraulics")
         slacks = np.where((node_pit[:, NODE_TYPE_T] == T) & active_node_lookup)[0]

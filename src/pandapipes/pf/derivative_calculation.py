@@ -10,7 +10,7 @@ from pandapipes.idx_branch import LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO, LOAD_V
 from pandapipes.idx_node import INFEED
 from pandapipes.idx_node import TINIT as TINIT_NODE
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
-from pandapipes.pf.pipeflow_setup import get_net_option
+from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
 from pandapipes.properties.fluids import get_fluid
 from pandapipes.properties.properties_toolbox import get_branch_real_density, get_branch_real_eta, \
     get_branch_cp
@@ -112,6 +112,11 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
     node_pit[:, INFEED] = False
     node_pit[infeed_node, INFEED] = True
 
+    branch_pit[:, JAC_DERIV_DT_NODE] = - m_init_i * cp_n
+    branch_pit[:, JAC_DERIV_DTOUT_NODE] = m_init_i1 * cp_i1
+    branch_pit[:, LOAD_VEC_NODES_FROM_T] = m_init_i1 * t_init_n * cp_n
+    branch_pit[:, LOAD_VEC_NODES_TO_T] = m_init_i1 * t_init_i1 * cp_i1
+
     if get_net_option(net, "transient"):
         tvor = branch_pit[:, T_OUT_OLD]
         delta_t = get_net_option(net, "dt")
@@ -122,6 +127,21 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
 
         branch_pit[:, JAC_DERIV_DT] = - cp * m_init_i
         branch_pit[:, JAC_DERIV_DTOUT] = cp / delta_t * length + cp * m_init_i + alpha
+
+        nodes_active_ht = get_lookup(net, "node", "active_heat_transfer")
+        nodes_zero_fl = get_lookup(net, "node", "zero_flow")[nodes_active_ht]
+
+        fn_zero = np.where(nodes_zero_fl[from_nodes])[0]
+        tn_zero = np.where(nodes_zero_fl[to_nodes])[0]
+
+        nodes_fn, inv_fn, num_fn = np.unique(from_nodes, return_inverse=True, return_counts=True)
+        nodes_tn, inv_tn, num_tn = np.unique(to_nodes, return_inverse=True, return_counts=True)
+
+        branch_pit[fn_zero, JAC_DERIV_DT_NODE] = cp_n[fn_zero] * num_fn[inv_fn][fn_zero]
+        branch_pit[tn_zero, JAC_DERIV_DTOUT_NODE] = cp_i1[tn_zero] * num_tn[inv_tn][tn_zero]
+        branch_pit[fn_zero, LOAD_VEC_NODES_FROM_T] = t_init_n[fn_zero] * cp_n[fn_zero] * num_fn[inv_fn][fn_zero]
+        branch_pit[tn_zero, LOAD_VEC_NODES_TO_T] = t_init_i1[tn_zero] * cp_i1[tn_zero] * num_tn[inv_tn][tn_zero]
+
     else:
         t_m = (t_init_i1 + t_init_i) / 2
         m_m = (m_init_i + m_init_i1) / 2
@@ -130,11 +150,6 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
         branch_pit[:, JAC_DERIV_DTOUT] = cp * m_m + alpha / 2 * length
         branch_pit[:, LOAD_VEC_BRANCHES_T] = cp * m_m * (-t_init_i + t_init_i1 - tl) - alpha * (
                     t_amb - t_m) * length + qext
-
-    branch_pit[:, JAC_DERIV_DT_NODE] = - m_init_i * cp_n
-    branch_pit[:, JAC_DERIV_DTOUT_NODE] = m_init_i1 * cp_i1
-    branch_pit[:, LOAD_VEC_NODES_FROM_T] = m_init_i1 * t_init_n * cp_n
-    branch_pit[:, LOAD_VEC_NODES_TO_T] = m_init_i1 * t_init_i1 * cp_i1
 
     # This approach can be used if you consider the effect of sources with given temperature (checkout issue #656)
 

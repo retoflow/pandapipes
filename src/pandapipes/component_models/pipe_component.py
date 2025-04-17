@@ -126,9 +126,6 @@ class Pipe(BranchWInternalsComponent):
         pipe_pit[nan_mask, TEXT] = get_net_option(net, 'ambient_temperature')
         pipe_pit[:, AREA] = pipe_pit[:, D] ** 2 * np.pi / 4
         pipe_pit[:, MDOTINIT] *= pipe_pit[:, AREA] * get_fluid(net).get_density(NORMAL_TEMPERATURE)
-        if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
-            pipe_pit[:, T_OUT_OLD] = 293
-            pipe_pit[:, TOUTINIT] = 293
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):

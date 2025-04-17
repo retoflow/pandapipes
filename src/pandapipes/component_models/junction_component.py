@@ -96,8 +96,6 @@ class Junction(NodeComponent):
         junction_pit[:, PAMB] = p_correction_height_air(junction_pit[:, HEIGHT])
         junction_pit[:, ACTIVE_ND] = junctions.in_service.values
 
-
-
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
         """
@@ -119,12 +117,12 @@ class Junction(NodeComponent):
 
         if get_net_option(net, "transient"):
             # output, all_float = cls.get_result_table(net)
-            if "res_internal" not in net:
-                net["res_internal"] = pd.DataFrame(
-                    np.nan, columns=["t_k"], index=np.arange(len(net["_active_pit"]["node"][:,
-                                                               TINIT])),
-                    dtype=np.float64
-                )
+            # TODO: This must be made more precise in different components
+            net["res_internal"] = pd.DataFrame(
+                np.nan, columns=["t_k"], index=np.arange(len(net["_active_pit"]["node"][:,
+                                                           TINIT])),
+                dtype=np.float64
+            )
             net["res_internal"]["t_k"] = net["_active_pit"]["node"][:, TINIT]
 
         f, t = get_lookup(net, "node", "from_to")[cls.table_name()]
