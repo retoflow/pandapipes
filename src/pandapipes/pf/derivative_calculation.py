@@ -137,10 +137,12 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
         nodes_fn, inv_fn, num_fn = np.unique(from_nodes, return_inverse=True, return_counts=True)
         nodes_tn, inv_tn, num_tn = np.unique(to_nodes, return_inverse=True, return_counts=True)
 
-        branch_pit[fn_zero, JAC_DERIV_DT_NODE] = cp_n[fn_zero] * num_fn[inv_fn][fn_zero]
-        branch_pit[tn_zero, JAC_DERIV_DTOUT_NODE] = cp_i1[tn_zero] * num_tn[inv_tn][tn_zero]
-        branch_pit[fn_zero, LOAD_VEC_NODES_FROM_T] = t_init_n[fn_zero] * cp_n[fn_zero] * num_fn[inv_fn][fn_zero]
-        branch_pit[tn_zero, LOAD_VEC_NODES_TO_T] = t_init_i1[tn_zero] * cp_i1[tn_zero] * num_tn[inv_tn][tn_zero]
+        branch_pit[fn_zero, JAC_DERIV_DT_NODE] = cp_n[fn_zero] / num_fn[inv_fn][fn_zero]
+        branch_pit[tn_zero, JAC_DERIV_DTOUT_NODE] = cp_i1[tn_zero] / num_tn[inv_tn][tn_zero]
+        branch_pit[fn_zero, LOAD_VEC_NODES_FROM_T] = t_init_n[fn_zero] * cp_n[fn_zero] / num_fn[
+            inv_fn][fn_zero]
+        branch_pit[tn_zero, LOAD_VEC_NODES_TO_T] = t_init_i1[tn_zero] * cp_i1[tn_zero] / num_tn[
+            inv_tn][tn_zero]
 
     else:
         t_m = (t_init_i1 + t_init_i) / 2
