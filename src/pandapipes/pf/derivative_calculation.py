@@ -118,15 +118,19 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
     branch_pit[:, LOAD_VEC_NODES_TO_T] = m_init_i1 * t_init_i1 * cp_i1
 
     if get_net_option(net, "transient"):
+        rho = get_branch_real_density(fluid, node_pit, branch_pit)
+        area = branch_pit[:, AREA]
         tvor = branch_pit[:, T_OUT_OLD]
         delta_t = get_net_option(net, "dt")
 
-        branch_pit[:, LOAD_VEC_BRANCHES_T] = (cp * (t_init_i1 - tvor) * (1 / delta_t) * length
-                                              + cp * m_init_i * (-t_init_i + t_init_i1 - tl)
-                                              - alpha * (t_amb - t_init_i1) * length + qext)
+        branch_pit[:, LOAD_VEC_BRANCHES_T] = (
+                rho * area * cp * (t_init_i1 - tvor) * (1 / delta_t) * length
+                + cp * m_init_i * (-t_init_i + t_init_i1 - tl)
+                - alpha * (t_amb - t_init_i1) * length + qext
+        )
 
         branch_pit[:, JAC_DERIV_DT] = - cp * m_init_i
-        branch_pit[:, JAC_DERIV_DTOUT] = cp / delta_t * length + cp * m_init_i + alpha
+        branch_pit[:, JAC_DERIV_DTOUT] = rho * area * cp / delta_t * length + cp * m_init_i + alpha
 
         nodes_active_ht = get_lookup(net, "node", "active_heat_transfer")
         nodes_zero_fl = get_lookup(net, "node", "zero_flow")[nodes_active_ht]
@@ -134,15 +138,15 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
         fn_zero = np.where(nodes_zero_fl[from_nodes])[0]
         tn_zero = np.where(nodes_zero_fl[to_nodes])[0]
 
-        nodes_fn, inv_fn, num_fn = np.unique(from_nodes, return_inverse=True, return_counts=True)
-        nodes_tn, inv_tn, num_tn = np.unique(to_nodes, return_inverse=True, return_counts=True)
+        # nodes_fn, inv_fn, num_fn = np.unique(from_nodes, return_inverse=True, return_counts=True)
+        # nodes_tn, inv_tn, num_tn = np.unique(to_nodes, return_inverse=True, return_counts=True)
 
-        branch_pit[fn_zero, JAC_DERIV_DT_NODE] = cp_n[fn_zero] / num_fn[inv_fn][fn_zero]
-        branch_pit[tn_zero, JAC_DERIV_DTOUT_NODE] = cp_i1[tn_zero] / num_tn[inv_tn][tn_zero]
-        branch_pit[fn_zero, LOAD_VEC_NODES_FROM_T] = t_init_n[fn_zero] * cp_n[fn_zero] / num_fn[
-            inv_fn][fn_zero]
-        branch_pit[tn_zero, LOAD_VEC_NODES_TO_T] = t_init_i1[tn_zero] * cp_i1[tn_zero] / num_tn[
-            inv_tn][tn_zero]
+        branch_pit[fn_zero, JAC_DERIV_DT_NODE] = cp_n[fn_zero]  * rho[fn_zero] * area[fn_zero]
+        branch_pit[tn_zero, JAC_DERIV_DTOUT_NODE] = cp_i1[tn_zero] * rho[tn_zero] * area[tn_zero]
+        branch_pit[fn_zero, LOAD_VEC_NODES_FROM_T] = t_init_n[fn_zero] * cp_n[fn_zero] * rho[
+            fn_zero] * area[fn_zero]
+        branch_pit[tn_zero, LOAD_VEC_NODES_TO_T] = t_init_i1[tn_zero] * cp_i1[tn_zero] * rho[
+            tn_zero] * area[tn_zero]
 
     else:
         t_m = (t_init_i1 + t_init_i) / 2
