@@ -526,8 +526,6 @@ def identify_active_nodes_branches(net, hydraulic=True):
             nodes_connected = node_pit[:, ACTIVE_ND].astype(np.bool_)
             branches_connected = branch_pit[:, ACTIVE_BR].astype(np.bool_)
     else:
-        fn = branch_pit[:, FROM_NODE].astype(np.int32)
-        tn = branch_pit[:, TO_NODE].astype(np.int32)
         # connectivity check for heat simulation (needs to consider branches with 0 velocity as
         # well)
         if get_net_option(net, "check_connectivity"):
@@ -544,6 +542,8 @@ def identify_active_nodes_branches(net, hydraulic=True):
                 branches_connected = np.copy(get_lookup(net, "branch", "active_hydraulics"))
                 nodes_connected = np.copy(get_lookup(net, "node", "active_hydraulics"))
             else:
+                fn = branch_pit[:, FROM_NODE].astype(np.int32)
+                tn = branch_pit[:, TO_NODE].astype(np.int32)
                 branches_connected = get_lookup(
                     net, "branch", "active_hydraulics"
                 ) & branches_connected_flow(branch_pit)
@@ -560,14 +560,17 @@ def identify_active_nodes_branches(net, hydraulic=True):
                 nodes_connected[fn_tn] = nodes_connected[fn_tn] & (flow > 0.1)
 
         if get_net_option(net, "transient"):
-            branches_zero = branches_zero_flow(branch_pit) & branches_connected
-            fn_tn, flow = _sum_by_group(
+            fn = branch_pit[:, FROM_NODE].astype(np.int32)[branches_connected]
+            tn = branch_pit[:, TO_NODE].astype(np.int32)[branches_connected]
+            branches_zero = branches_zero_flow(branch_pit[branches_connected])
+            fn_tn, flow, sum_br = _sum_by_group(
                 get_net_option(net, "use_numba"),
                 np.concatenate([fn, tn]),
                 np.concatenate([branches_zero, branches_zero]).astype(np.int32),
+                np.ones(len(fn) * 2, dtype=np.int32),
             )
             nodes_zero = np.copy(nodes_connected)
-            nodes_zero[fn_tn] = nodes_zero[fn_tn] & (flow > 0.1)
+            nodes_zero[fn_tn] = nodes_zero[fn_tn] & np.isclose(flow, sum_br, rtol=1e-10, atol=1e-3)
             net["_lookups"]["node_zero_flow"] = nodes_zero
             net["_lookups"]["branch_zero_flow"] = branches_zero
     mode = "hydraulics" if hydraulic else "heat_transfer"
