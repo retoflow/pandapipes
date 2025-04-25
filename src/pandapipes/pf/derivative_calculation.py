@@ -6,7 +6,7 @@ from pandapipes.idx_branch import LENGTH, D, K, RE, LAMBDA, LOAD_VEC_BRANCHES, \
     FROM_NODE, TO_NODE, TOUTINIT, TEXT, AREA, ALPHA, TL, QEXT, LOAD_VEC_NODES_FROM_T, LOAD_VEC_NODES_TO_T,\
     LOAD_VEC_BRANCHES_T, JAC_DERIV_DT, JAC_DERIV_DTOUT, JAC_DERIV_DTOUT_NODE, \
     JAC_DERIV_DT_NODE, MDOTINIT, BRANCH_TYPE, CIRC
-from pandapipes.idx_node import TINIT as TINIT_NODE, INFEED
+from pandapipes.idx_node import TINIT as TINIT_NODE, INFEED, LOAD_T, LOAD, JAC_DERIV_DT_LOAD, JAC_DERIV_DT_SLACK, MDOTSLACKINIT
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.properties.fluids import get_fluid
 from pandapipes.properties.properties_toolbox import get_branch_real_density, get_branch_real_eta, \
@@ -94,9 +94,10 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
     to_nodes = get_to_nodes_corrected(branch_pit)
     t_init_i = node_pit[from_nodes, TINIT_NODE]
     t_init_i1 = branch_pit[:, TOUTINIT]
-    t_init_n = node_pit[to_nodes, TINIT_NODE]
-    cp_n = fluid.get_heat_capacity(t_init_n)
+    t_init_n = node_pit[:, TINIT_NODE]
+    cp_i = fluid.get_heat_capacity(t_init_i)
     cp_i1 = fluid.get_heat_capacity(t_init_i1)
+    cp_n = fluid.get_heat_capacity(t_init_n)
     t_amb = branch_pit[:, TEXT]
     length = branch_pit[:, LENGTH]
     alpha = branch_pit[:, ALPHA] * np.pi * branch_pit[:, D]
@@ -112,20 +113,14 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
     branch_pit[:, LOAD_VEC_BRANCHES_T] = cp * m_m * (-t_init_i + t_init_i1 - tl) - alpha * (
                 t_amb - t_m) * length + qext
 
-    branch_pit[:, JAC_DERIV_DT_NODE] = - m_init_i * cp_n
+    node_pit[:, LOAD_T] = node_pit[:, LOAD] * cp_n * t_init_n
+    node_pit[:, JAC_DERIV_DT_LOAD] = - node_pit[:, LOAD] * cp_n
+    node_pit[:, JAC_DERIV_DT_SLACK] = node_pit[:, MDOTSLACKINIT] * cp_n
+
+    branch_pit[:, JAC_DERIV_DT_NODE] = - m_init_i * cp_i
     branch_pit[:, JAC_DERIV_DTOUT_NODE] = m_init_i1 * cp_i1
-    branch_pit[:, LOAD_VEC_NODES_FROM_T] = m_init_i1 * t_init_n * cp_n
+    branch_pit[:, LOAD_VEC_NODES_FROM_T] = m_init_i1 * t_init_i * cp_i
     branch_pit[:, LOAD_VEC_NODES_TO_T] = m_init_i1 * t_init_i1 * cp_i1
-
-    # This approach can be used if you consider the effect of sources with given temperature (checkout issue #656)
-
-    # branch_pit[:, LOAD_VEC_NODES_FROM_T] = m_init_i * t_init_i * cp_i
-    # --> cp_i is calculated by fluid.get_heat_capacity(t_init_i)
-    # branch_pit[:, LOAD_VEC_NODES_TO_T] = m_init_i1 * t_init_i1 * cp_i1
-    # --> still missing is the derivative of loads
-    # t_init = node_pit[:, TINIT_NODE]
-    # cp_n = fluid.get_heat_capacity(t_init)
-    # node_pit[:, LOAD_T] = cp_n * node_pit[:, LOAD] * t_init
 
     node_pit[:, INFEED] = False
     node_pit[infeed_node, INFEED] = True
@@ -149,8 +144,6 @@ def calc_lambda(m, eta, d, k, gas_mode, friction_model, lengths, options, area):
     :type m:
     :param eta:
     :type eta:
-    :param rho:
-    :type rho:
     :param d:
     :type d:
     :param k:
@@ -206,12 +199,10 @@ def calc_der_lambda(m, eta, d, k, friction_model, lambda_pipe, area):
     on Nikuradse. This should not be a problem as the pressure loss term will equal zero
     (lambda * u^2).
 
-    :param v:
-    :type v:
+    :param m:
+    :type m:
     :param eta:
     :type eta:
-    :param rho:
-    :type rho:
     :param d:
     :type d:
     :param k:
@@ -220,6 +211,8 @@ def calc_der_lambda(m, eta, d, k, friction_model, lambda_pipe, area):
     :type friction_model:
     :param lambda_pipe:
     :type lambda_pipe:
+    :param area:
+    :type area:
     :return:
     :rtype:
     """
