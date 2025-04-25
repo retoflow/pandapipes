@@ -1,19 +1,17 @@
 import numpy as np
 
 from pandapipes.constants import NORMAL_TEMPERATURE
-from pandapipes.idx_branch import LENGTH, D, K, RE, LAMBDA, LOAD_VEC_BRANCHES, \
-    JAC_DERIV_DM, JAC_DERIV_DP, JAC_DERIV_DP1, JAC_DERIV_DM_NODE, \
-    FROM_NODE, TO_NODE, TOUTINIT, TEXT, AREA, ALPHA, TL, QEXT, \
-    LOAD_VEC_BRANCHES_T, JAC_DERIV_DT, JAC_DERIV_DT_NODE, T_OUT_OLD
-from pandapipes.idx_branch import LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO, LOAD_VEC_NODES_FROM_T, \
-    LOAD_VEC_NODES_TO_T, JAC_DERIV_DTOUT, JAC_DERIV_DTOUT_NODE, MDOTINIT, BRANCH_TYPE, CIRC
-from pandapipes.idx_node import INFEED
-from pandapipes.idx_node import TINIT as TINIT_NODE
-    JAC_DERIV_DM, JAC_DERIV_DP, JAC_DERIV_DP1, LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO, JAC_DERIV_DM_NODE, \
-    FROM_NODE, TO_NODE, TOUTINIT, TEXT, AREA, ALPHA, TL, QEXT, LOAD_VEC_NODES_FROM_T, LOAD_VEC_NODES_TO_T,\
-    LOAD_VEC_BRANCHES_T, JAC_DERIV_DT, JAC_DERIV_DTOUT, JAC_DERIV_DTOUT_NODE, \
-    JAC_DERIV_DT_NODE, MDOTINIT, BRANCH_TYPE, CIRC
-from pandapipes.idx_node import TINIT as TINIT_NODE, INFEED, LOAD_T, LOAD, JAC_DERIV_DT_LOAD, JAC_DERIV_DT_SLACK, MDOTSLACKINIT
+from pandapipes.idx_branch import (LENGTH, D, K, RE, LAMBDA, LOAD_VEC_BRANCHES,
+                                   JAC_DERIV_DM, JAC_DERIV_DP, JAC_DERIV_DP1, JAC_DERIV_DM_NODE,
+                                   T_OUT_OLD,
+                                   FROM_NODE, TO_NODE, TOUTINIT, TEXT, AREA, ALPHA, TL, QEXT,
+                                   LOAD_VEC_BRANCHES_T, JAC_DERIV_DT, JAC_DERIV_DT_NODE,
+                                   LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO,
+                                   LOAD_VEC_NODES_FROM_T,
+                                   LOAD_VEC_NODES_TO_T, JAC_DERIV_DTOUT, JAC_DERIV_DTOUT_NODE,
+                                   MDOTINIT, BRANCH_TYPE, CIRC)
+from pandapipes.idx_node import TINIT as TINIT_NODE, INFEED, LOAD_T, LOAD, JAC_DERIV_DT_LOAD, \
+    JAC_DERIV_DT_SLACK, MDOTSLACKINIT
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
 from pandapipes.properties.fluids import get_fluid
@@ -209,6 +207,8 @@ def calc_lambda(m, eta, d, k, gas_mode, friction_model, lengths, options, area):
     :type lengths:
     :param options:
     :type options:
+    :param area:
+    :type area:
     :return:
     :rtype:
     """
