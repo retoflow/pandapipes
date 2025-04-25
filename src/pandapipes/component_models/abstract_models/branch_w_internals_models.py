@@ -16,6 +16,7 @@ from pandapipes.idx_node import (
     PINIT,
     PAMB,
     ACTIVE as ACTIVE_ND,
+    TINIT_OLD,
 )
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_lookup, get_table_number, \
     get_net_option
@@ -180,6 +181,7 @@ class BranchWInternalsComponent(BranchComponent):
             int_node_pit[:, TINIT_NODE] = vinterp(junction_pit[fj_nodes, TINIT_NODE],
                                                   junction_pit[tj_nodes, TINIT_NODE],
                                                   int_node_number)
+        int_node_pit[:, TINIT_OLD] = int_node_pit[:, TINIT_NODE].astype(np.float64)
         return table_nr, int_node_number, int_node_pit, junction_pit, fj_nodes, tj_nodes
 
     @classmethod

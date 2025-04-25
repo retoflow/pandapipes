@@ -10,9 +10,18 @@ from pandapipes.idx_branch import (LENGTH, D, K, RE, LAMBDA, LOAD_VEC_BRANCHES,
                                    LOAD_VEC_NODES_FROM_T,
                                    LOAD_VEC_NODES_TO_T, JAC_DERIV_DTOUT, JAC_DERIV_DTOUT_NODE,
                                    MDOTINIT, BRANCH_TYPE, CIRC)
-from pandapipes.idx_node import TINIT as TINIT_NODE, INFEED, LOAD_T, LOAD, JAC_DERIV_DT_LOAD, \
-    JAC_DERIV_DT_SLACK, MDOTSLACKINIT
-from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
+from pandapipes.idx_node import (
+    TINIT as TINIT_NODE,
+    INFEED,
+    LOAD_T,
+    LOAD,
+    JAC_DERIV_DT_LOAD,
+    JAC_DERIV_DT_SLACK,
+    MDOTSLACKINIT,
+    TINIT_OLD,
+)
+from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected, \
+    _sum_by_group
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
 from pandapipes.properties.fluids import get_fluid
 from pandapipes.properties.properties_toolbox import get_branch_real_density, get_branch_real_eta, \
@@ -143,18 +152,53 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
         nodes_active_ht = get_lookup(net, "node", "active_heat_transfer")
         nodes_zero_fl = get_lookup(net, "node", "zero_flow")[nodes_active_ht]
 
-        fn_zero = np.where(nodes_zero_fl[from_nodes])[0]
-        tn_zero = np.where(nodes_zero_fl[to_nodes])[0]
+        if np.any(nodes_zero_fl):
+            fn_zero = np.where(nodes_zero_fl[from_nodes])[0]
+            tn_zero = np.where(nodes_zero_fl[to_nodes])[0]
+            t_from_node_vor_zero = node_pit[from_nodes[fn_zero], TINIT_OLD]
+            t_to_node_vor_zero = node_pit[to_nodes[tn_zero], TINIT_OLD]
+            t_to_node = node_pit[to_nodes[tn_zero], TINIT_NODE]
 
-        # nodes_fn, inv_fn, num_fn = np.unique(from_nodes, return_inverse=True, return_counts=True)
-        # nodes_tn, inv_tn, num_tn = np.unique(to_nodes, return_inverse=True, return_counts=True)
+            fn_eq = (rho[fn_zero] * area[fn_zero] * cp[fn_zero] * (1 / delta_t)
+                     * (t_init_i[fn_zero] - t_from_node_vor_zero)
+                     - alpha[fn_zero] * (t_amb[fn_zero] - t_init_i[fn_zero]))
 
-        branch_pit[fn_zero, JAC_DERIV_DT_NODE] = cp_n[fn_zero]  * rho[fn_zero] * area[fn_zero]
-        branch_pit[tn_zero, JAC_DERIV_DTOUT_NODE] = cp_i1[tn_zero] * rho[tn_zero] * area[tn_zero]
-        branch_pit[fn_zero, LOAD_VEC_NODES_FROM_T] = t_init_n[fn_zero] * cp_n[fn_zero] * rho[
-            fn_zero] * area[fn_zero]
-        branch_pit[tn_zero, LOAD_VEC_NODES_TO_T] = t_init_i1[tn_zero] * cp_i1[tn_zero] * rho[
-            tn_zero] * area[tn_zero]
+            tn_eq = (rho[tn_zero] * area[tn_zero] * cp[tn_zero] * (1 / delta_t)
+                     * (t_to_node - t_to_node_vor_zero)
+                     - alpha[tn_zero] * (t_amb[tn_zero] - t_to_node))
+
+            fn_deriv = (rho[fn_zero] * area[fn_zero] * cp[fn_zero] * (1 / delta_t) + alpha[fn_zero])
+            tn_deriv = (rho[tn_zero] * area[tn_zero] * cp[tn_zero] * (1 / delta_t) + alpha[tn_zero])
+
+            fn_nodes, fn_eq_sum, fn_deriv_sum= _sum_by_group(
+                get_net_option(net, "use_numba"),
+                from_nodes[fn_zero], fn_eq, fn_deriv
+            )
+
+            tn_nodes, tn_eq_sum, tn_deriv_sum = _sum_by_group(
+                get_net_option(net, "use_numba"),
+                to_nodes[tn_zero], tn_eq, tn_deriv
+            )
+
+            node_pit[nodes_zero_fl, LOAD_T] = 0
+            node_pit[fn_nodes, LOAD_T] += fn_eq_sum
+            node_pit[tn_nodes, LOAD_T] += tn_eq_sum
+            node_pit[nodes_zero_fl, JAC_DERIV_DT_LOAD] = 0
+            node_pit[fn_nodes, JAC_DERIV_DT_LOAD] -= fn_deriv_sum
+            node_pit[tn_nodes, JAC_DERIV_DT_LOAD] -= tn_deriv_sum
+            node_pit[nodes_zero_fl, JAC_DERIV_DT_SLACK] = 0
+
+            branch_pit[fn_zero, JAC_DERIV_DT_NODE] = 0
+            branch_pit[tn_zero, JAC_DERIV_DTOUT_NODE] = 0
+            branch_pit[fn_zero, LOAD_VEC_NODES_FROM_T] = 0
+            branch_pit[tn_zero, LOAD_VEC_NODES_TO_T] = 0
+
+            from_nodes_not_zero = from_nodes[no_cp & ~nodes_zero_fl[from_nodes]]
+            to_nodes_not_zero = to_nodes[no_cp & ~nodes_zero_fl[to_nodes]]
+            infeed_node = np.setdiff1d(from_nodes_not_zero, to_nodes_not_zero)
+
+            node_pit[:, INFEED] = False
+            node_pit[infeed_node, INFEED] = True
 
     else:
         t_m = (t_init_i1 + t_init_i) / 2

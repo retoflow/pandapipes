@@ -83,12 +83,12 @@ class Junction(NodeComponent):
         if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
             junction_pit[:, :] = np.array([table_nr, 0, L] + [0] * (node_cols - 3))
             junction_pit[:, TINIT] = junctions.tfluid_k.values
-            junction_pit[:, TINIT_OLD] = junction_pit[:, TINIT]
         else:
             junction_pit[:, EXT_GRID_OCCURENCE] = 0
             junction_pit[:, EXT_GRID_OCCURENCE_T] = 0
             junction_pit[:, LOAD] = 0
 
+        junction_pit[:, TINIT_OLD] = junction_pit[:, TINIT]
         junction_pit[:, ELEMENT_IDX] = junctions.index.values
         junction_pit[:, HEIGHT] = junctions.height_m.values
         junction_pit[:, PINIT] = junctions.pn_bar.values

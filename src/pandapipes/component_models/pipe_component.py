@@ -11,7 +11,7 @@ from pandapipes.component_models.component_toolbox import set_entry_check_repeat
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE
 from pandapipes.idx_branch import FROM_NODE, TO_NODE, LENGTH, D, AREA, K, \
-    T_OUT_OLD, TOUTINIT, MDOTINIT, ALPHA, QEXT, TEXT, LOSS_COEFFICIENT as LC
+    MDOTINIT, ALPHA, QEXT, TEXT, LOSS_COEFFICIENT as LC
 from pandapipes.idx_node import PINIT, TINIT as TINIT_NODE, PAMB
 from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup, get_net_option
 from pandapipes.pf.result_extraction import extract_branch_results_with_internals, \

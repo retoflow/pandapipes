@@ -9,8 +9,18 @@ import numpy as np
 from pandapower.auxiliary import ppException
 from scipy.sparse import coo_matrix, csgraph
 
-from pandapipes.idx_branch import FROM_NODE, TO_NODE, branch_cols, MDOTINIT, \
-    ACTIVE as ACTIVE_BR, FLOW_RETURN_CONNECT, ACTIVE, BRANCH_TYPE, CIRC
+from pandapipes.idx_branch import (
+    FROM_NODE,
+    TO_NODE,
+    branch_cols,
+    MDOTINIT,
+    ACTIVE as ACTIVE_BR,
+    FLOW_RETURN_CONNECT,
+    ACTIVE,
+    BRANCH_TYPE,
+    CIRC,
+    LENGTH,
+)
 from pandapipes.idx_node import NODE_TYPE, P, NODE_TYPE_T, node_cols, T, ACTIVE as ACTIVE_ND, \
     TABLE_IDX as TABLE_IDX_ND, ELEMENT_IDX as ELEMENT_IDX_ND, INFEED
 from pandapipes.pf.internals_toolbox import _sum_by_group
@@ -539,7 +549,8 @@ def identify_active_nodes_branches(net, hydraulic=True):
             # that they are "out of service")
 
             if get_net_option(net, "transient"):
-                branches_connected = np.copy(get_lookup(net, "branch", "active_hydraulics"))
+                branches_connected = (np.copy(get_lookup(net, "branch", "active_hydraulics"))
+                                      & (branch_pit[:, LENGTH] > 0))
                 nodes_connected = np.copy(get_lookup(net, "node", "active_hydraulics"))
             else:
                 fn = branch_pit[:, FROM_NODE].astype(np.int32)
@@ -650,7 +661,8 @@ def check_connectivity(net, branch_pit, node_pit, mode="hydraulics"):
         slacks = np.where((node_pit[:, NODE_TYPE] == P) & active_node_lookup)[0]
     else:
         if get_net_option(net, "transient"):
-            active_branch_lookup = get_lookup(net, "branch", "active_hydraulics")
+            active_branch_lookup = (get_lookup(net, "branch", "active_hydraulics")
+                                    & (branch_pit[:, LENGTH] > 0))
         else:
             active_branch_lookup = branches_connected_flow(branch_pit) \
                                    & get_lookup(net, "branch", "active_hydraulics")
