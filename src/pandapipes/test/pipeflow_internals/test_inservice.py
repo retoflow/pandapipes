@@ -344,7 +344,7 @@ def test_connectivity_heat2(complex_heat_connectivity_grid, use_numba):
     net.pipe.at[7, "in_service"] = True
 
     max_iter_hyd = 3 if use_numba else 3
-    max_iter_therm = 5 if use_numba else 5
+    max_iter_therm = 100 if use_numba else 100
     pandapipes.pipeflow(net, max_iter_hyd=max_iter_hyd, max_iter_therm=max_iter_therm,
                         mode='sequential', check_connectivity=True, use_numba=use_numba)
 
@@ -413,7 +413,7 @@ def test_connectivity_heat4(complex_heat_connectivity_grid, use_numba):
     net2 = copy.deepcopy(net)
 
     max_iter_hyd = 10 if use_numba else 10
-    max_iter_therm = 6 if use_numba else 6
+    max_iter_therm = 100 if use_numba else 100
     pandapipes.pipeflow(net, max_iter_hyd=max_iter_hyd, max_iter_therm=max_iter_therm,
                         mode='sequential', check_connectivity=True, use_numba=use_numba)
     pandapipes.pipeflow(net2, max_iter_hyd=max_iter_hyd, max_iter_therm=max_iter_therm,

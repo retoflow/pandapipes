@@ -9,6 +9,11 @@ from pandapipes.idx_branch import LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO, LOAD_V
     LOAD_VEC_NODES_TO_T, JAC_DERIV_DTOUT, JAC_DERIV_DTOUT_NODE, MDOTINIT, BRANCH_TYPE, CIRC
 from pandapipes.idx_node import INFEED
 from pandapipes.idx_node import TINIT as TINIT_NODE
+    JAC_DERIV_DM, JAC_DERIV_DP, JAC_DERIV_DP1, LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO, JAC_DERIV_DM_NODE, \
+    FROM_NODE, TO_NODE, TOUTINIT, TEXT, AREA, ALPHA, TL, QEXT, LOAD_VEC_NODES_FROM_T, LOAD_VEC_NODES_TO_T,\
+    LOAD_VEC_BRANCHES_T, JAC_DERIV_DT, JAC_DERIV_DTOUT, JAC_DERIV_DTOUT_NODE, \
+    JAC_DERIV_DT_NODE, MDOTINIT, BRANCH_TYPE, CIRC
+from pandapipes.idx_node import TINIT as TINIT_NODE, INFEED, LOAD_T, LOAD, JAC_DERIV_DT_LOAD, JAC_DERIV_DT_SLACK, MDOTSLACKINIT
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
 from pandapipes.properties.fluids import get_fluid
@@ -98,9 +103,10 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
     to_nodes = get_to_nodes_corrected(branch_pit)
     t_init_i = node_pit[from_nodes, TINIT_NODE]
     t_init_i1 = branch_pit[:, TOUTINIT]
-    t_init_n = node_pit[to_nodes, TINIT_NODE]
-    cp_n = fluid.get_heat_capacity(t_init_n)
+    t_init_n = node_pit[:, TINIT_NODE]
+    cp_i = fluid.get_heat_capacity(t_init_i)
     cp_i1 = fluid.get_heat_capacity(t_init_i1)
+    cp_n = fluid.get_heat_capacity(t_init_n)
     t_amb = branch_pit[:, TEXT]
     length = branch_pit[:, LENGTH]
     alpha = branch_pit[:, ALPHA] * np.pi * branch_pit[:, D]
@@ -112,9 +118,13 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
     node_pit[:, INFEED] = False
     node_pit[infeed_node, INFEED] = True
 
-    branch_pit[:, JAC_DERIV_DT_NODE] = - m_init_i * cp_n
+    node_pit[:, LOAD_T] = node_pit[:, LOAD] * cp_n * t_init_n
+    node_pit[:, JAC_DERIV_DT_LOAD] = - node_pit[:, LOAD] * cp_n
+    node_pit[:, JAC_DERIV_DT_SLACK] = node_pit[:, MDOTSLACKINIT] * cp_n
+
+    branch_pit[:, JAC_DERIV_DT_NODE] = - m_init_i * cp_i
     branch_pit[:, JAC_DERIV_DTOUT_NODE] = m_init_i1 * cp_i1
-    branch_pit[:, LOAD_VEC_NODES_FROM_T] = m_init_i1 * t_init_n * cp_n
+    branch_pit[:, LOAD_VEC_NODES_FROM_T] = m_init_i1 * t_init_i * cp_i
     branch_pit[:, LOAD_VEC_NODES_TO_T] = m_init_i1 * t_init_i1 * cp_i1
 
     if get_net_option(net, "transient"):
