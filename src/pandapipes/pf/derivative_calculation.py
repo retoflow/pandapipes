@@ -149,12 +149,28 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
         branch_pit[:, JAC_DERIV_DT] = - cp * m_init_i
         branch_pit[:, JAC_DERIV_DTOUT] = rho * area * cp / delta_t * length + cp * m_init_i + alpha
 
+        branches_active_ht = get_lookup(net, "branch", "active_heat_transfer")
+        branches_zero_fl = get_lookup(net, "branch", "zero_flow")[branches_active_ht]
+        if np.any(branches_zero_fl):
+            # TODO: maybe replace this statement with a component lookup
+            zero_length = np.isclose(branch_pit[:, LENGTH], 0, rtol=1e-6, atol=1e-10)
+            mask = zero_length & branches_zero_fl
+            if np.any(mask):
+                branch_pit[mask, LOAD_VEC_BRANCHES_T] = (
+                        rho[mask] * area[mask] * cp[mask] * (t_init_i1[mask] - tvor[mask]) * (1 / delta_t)
+                        - alpha[mask] * (t_amb[mask] - t_init_i1[mask])
+                )
+                branch_pit[mask, JAC_DERIV_DT] = 0
+                branch_pit[mask, JAC_DERIV_DTOUT] = (rho[mask] * area[mask] * cp[mask] / delta_t +
+                                                     alpha[mask])
+
         nodes_active_ht = get_lookup(net, "node", "active_heat_transfer")
         nodes_zero_fl = get_lookup(net, "node", "zero_flow")[nodes_active_ht]
 
         if np.any(nodes_zero_fl):
-            fn_zero = np.where(nodes_zero_fl[from_nodes])[0]
-            tn_zero = np.where(nodes_zero_fl[to_nodes])[0]
+            fn_zero = nodes_zero_fl[from_nodes]
+            tn_zero = nodes_zero_fl[to_nodes]
+
             t_from_node_vor_zero = node_pit[from_nodes[fn_zero], TINIT_OLD]
             t_to_node_vor_zero = node_pit[to_nodes[tn_zero], TINIT_OLD]
             t_to_node = node_pit[to_nodes[tn_zero], TINIT_NODE]

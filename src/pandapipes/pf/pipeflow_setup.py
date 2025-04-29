@@ -549,8 +549,7 @@ def identify_active_nodes_branches(net, hydraulic=True):
             # that they are "out of service")
 
             if get_net_option(net, "transient"):
-                branches_connected = (np.copy(get_lookup(net, "branch", "active_hydraulics"))
-                                      & (branch_pit[:, LENGTH] > 0))
+                branches_connected = np.copy(get_lookup(net, "branch", "active_hydraulics"))
                 nodes_connected = np.copy(get_lookup(net, "node", "active_hydraulics"))
             else:
                 fn = branch_pit[:, FROM_NODE].astype(np.int32)
@@ -571,13 +570,13 @@ def identify_active_nodes_branches(net, hydraulic=True):
                 nodes_connected[fn_tn] = nodes_connected[fn_tn] & (flow > 0.1)
 
         if get_net_option(net, "transient"):
-            fn = branch_pit[:, FROM_NODE].astype(np.int32)[branches_connected]
-            tn = branch_pit[:, TO_NODE].astype(np.int32)[branches_connected]
-            branches_zero = branches_zero_flow(branch_pit[branches_connected])
+            fn = branch_pit[:, FROM_NODE].astype(np.int32)
+            tn = branch_pit[:, TO_NODE].astype(np.int32)
+            branches_zero = branches_zero_flow(branch_pit)
             fn_tn, flow, sum_br = _sum_by_group(
                 get_net_option(net, "use_numba"),
-                np.concatenate([fn, tn]),
-                np.concatenate([branches_zero, branches_zero]).astype(np.int32),
+                np.concatenate([fn[branches_connected], tn[branches_connected]]),
+                np.concatenate([branches_zero[branches_connected], branches_zero[branches_connected]]).astype(np.int32),
                 np.ones(len(fn) * 2, dtype=np.int32),
             )
             nodes_zero = np.copy(nodes_connected)
@@ -661,8 +660,7 @@ def check_connectivity(net, branch_pit, node_pit, mode="hydraulics"):
         slacks = np.where((node_pit[:, NODE_TYPE] == P) & active_node_lookup)[0]
     else:
         if get_net_option(net, "transient"):
-            active_branch_lookup = (get_lookup(net, "branch", "active_hydraulics")
-                                    & (branch_pit[:, LENGTH] > 0))
+            active_branch_lookup = get_lookup(net, "branch", "active_hydraulics")
         else:
             active_branch_lookup = branches_connected_flow(branch_pit) \
                                    & get_lookup(net, "branch", "active_hydraulics")
