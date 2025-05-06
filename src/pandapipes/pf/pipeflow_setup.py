@@ -577,7 +577,7 @@ def identify_active_nodes_branches(net, hydraulic=True):
                 get_net_option(net, "use_numba"),
                 np.concatenate([fn[branches_connected], tn[branches_connected]]),
                 np.concatenate([branches_zero[branches_connected], branches_zero[branches_connected]]).astype(np.int32),
-                np.ones(len(fn) * 2, dtype=np.int32),
+                np.ones(len(fn[branches_connected]) * 2, dtype=np.int32),
             )
             nodes_zero = np.copy(nodes_connected)
             nodes_zero[fn_tn] = nodes_zero[fn_tn] & np.isclose(flow, sum_br, rtol=1e-10, atol=1e-3)
