@@ -58,6 +58,11 @@ def pipeflow(net, sol_vec=None, **kwargs):
         >>> pipeflow(net, mode="hydraulics")
 
     """
+    pre_calculation(net, sol_vec, **kwargs)
+    calculation(net)
+    post_calculation(net)
+
+def pre_calculation(net, sol_vec=None, **kwargs):
     local_params = dict(locals())
 
     # Inputs & initialization of variables
@@ -79,6 +84,10 @@ def pipeflow(net, sol_vec=None, **kwargs):
     calculate_heat = calculation_mode in ["heat", 'sequential']
     calculate_bidrect = calculation_mode == "bidirectional"
 
+    modes = {"calc_bidirect": calculate_bidrect,
+             "calc_heat": calculate_heat,
+             "calc_hydraulics": calculate_hydraulics,
+             "calc_mode": calculation_mode}
 
     # TODO: This is not necessary in every time step, but we need the result! The result of the
     #       connectivity check is currently not saved anywhere!
@@ -89,18 +98,23 @@ def pipeflow(net, sol_vec=None, **kwargs):
     if calculation_mode == 'heat':
         use_given_hydraulic_results(net, sol_vec)
 
-    if not (calculate_hydraulics | calculate_heat | calculate_bidrect):
+    net['_modes'] = modes
+
+def calculation(net):
+    modes = net['_modes']
+    calc_bidirect, calc_heat, calc_hydraulics = modes["calc_bidirect"], modes["calc_heat"], modes["calc_hydraulics"]
+    if not (calc_hydraulics | calc_heat | calc_bidirect):
         raise UserWarning("No proper calculation mode chosen.")
-    elif calculate_bidrect:
+    elif calc_bidirect:
         bidirectional(net)
     else:
-        if calculate_hydraulics:
+        if calc_hydraulics:
             hydraulics(net)
-        if calculate_heat:
+        if calc_heat:
             heat_transfer(net)
 
-    extract_all_results(net, calculation_mode)
-
+def post_calculation(net):
+    extract_all_results(net)
 
 def use_given_hydraulic_results(net, sol_vec):
     node_pit = net["_pit"]["node"]

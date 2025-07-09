@@ -15,7 +15,7 @@ except ImportError:
     from pandapower.pf.no_numba import jit
 
 
-def extract_all_results(net, calculation_mode):
+def extract_all_results(net):
     """
     Extract results from branch pit and node pit and write them to the different tables of the net,\
     as defined by the component models.
@@ -27,6 +27,7 @@ def extract_all_results(net, calculation_mode):
     :return: No output
 
     """
+    calculation_mode = net["_modes"]["calc_mode"]
     branch_pit = net["_pit"]["branch"]
     node_pit = net["_pit"]["node"]
     branch_results = get_basic_branch_results(net, branch_pit, node_pit)
