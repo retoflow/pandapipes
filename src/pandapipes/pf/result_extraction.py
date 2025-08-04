@@ -82,16 +82,17 @@ def get_branch_results_gas(net, branch_pit, node_pit, from_nodes, to_nodes, v_mp
                        / (p_abs_from[mask] ** 2 - p_abs_to[mask] ** 2)
 
     fluid = get_fluid(net)
+    # TODO: this is only allowed without temperature calculation (assumed for gases)
     t_from = node_pit[from_nodes, TINIT_NODE]
-    t_to = branch_pit[:, TOUTINIT]
+    t_to = node_pit[to_nodes, TINIT_NODE]
     tm = (t_from + t_to) / 2
     numerator_from = NORMAL_PRESSURE * t_from / NORMAL_TEMPERATURE
     numerator_to = NORMAL_PRESSURE * t_to / NORMAL_TEMPERATURE
     numerator = NORMAL_PRESSURE * tm / NORMAL_TEMPERATURE
 
-    normfactor_from = numerator_from * fluid.get_property("compressibility", p_abs_from) / p_abs_from
-    normfactor_to = numerator_to * fluid.get_property("compressibility", p_abs_to) / p_abs_to
-    normfactor_mean = numerator * fluid.get_property("compressibility", p_abs_mean) / p_abs_mean
+    normfactor_from = numerator_from * fluid.get_compressibility(p_abs_from, t_from) / p_abs_from
+    normfactor_to = numerator_to * fluid.get_compressibility(p_abs_to, t_to) / p_abs_to
+    normfactor_mean = numerator * fluid.get_compressibility(p_abs_mean, tm) / p_abs_mean
 
     v_gas_from = v_mps * normfactor_from
     v_gas_to = v_mps * normfactor_to
@@ -107,9 +108,17 @@ def get_branch_results_gas_numba(net, branch_pit, node_pit, from_nodes, to_nodes
                                                            p_from, p_to)
 
     fluid = get_fluid(net)
-    comp_from = fluid.get_property("compressibility", p_abs_from)
-    comp_to = fluid.get_property("compressibility", p_abs_to)
-    comp_mean = fluid.get_property("compressibility", p_abs_mean)
+    args_from, args_to, args_mean = [p_abs_from], [p_abs_to], [p_abs_mean]
+    if hasattr(fluid.all_properties["compressibility"], "allow_2d"):
+        # TODO: this is only allowed without temperature calculation
+        t_from = node_pit[from_nodes, TINIT_NODE]
+        t_to = node_pit[to_nodes, TINIT_NODE]
+        args_from.append(t_from)
+        args_to.append(t_to)
+        args_mean.append((t_from + t_to) / 2)
+    comp_from = fluid.get_compressibility(*args_from)
+    comp_to = fluid.get_compressibility(*args_to)
+    comp_mean = fluid.get_compressibility(*args_mean)
 
     v_gas_from, v_gas_to, v_gas_mean, normfactor_from, normfactor_to, normfactor_mean = \
         get_gas_vel_numba(node_pit, branch_pit, comp_from, comp_to, comp_mean, p_abs_from, p_abs_to,
@@ -161,7 +170,7 @@ def get_gas_vel_numba(node_pit, branch_pit, comp_from, comp_to, comp_mean, p_abs
 def extract_branch_results_with_internals(net, branch_results, table_name,
                                           res_nodes_from_hydraulics, res_nodes_from_heat,
                                           res_nodes_to_hydraulics, res_nodes_to_heat,
-                                          res_mean_hydraulics, res_branch_ht, res_mean_heat, node_name,
+                                          res_mean_hydraulics, res_branch_ht, res_mean_heat, internal_node_name,
                                           simulation_mode):
     # the result table to write results to
     res_table = net["res_" + table_name]
@@ -179,7 +188,7 @@ def extract_branch_results_with_internals(net, branch_results, table_name,
     node_pit = net["_pit"]["node"]
 
     # the id of the external node table inside the node_pit (mostly this is "junction": 0)
-    ext_node_tbl_idx = get_table_number(get_lookup(net, "node", "table"), node_name)
+    ext_node_tbl_idx = get_table_number(get_lookup(net, "node", "table"), internal_node_name)
 
     for (result_mode, res_nodes_from, res_nodes_to, res_mean, res_branch) in [
         ("hydraulics", res_nodes_from_hydraulics, res_nodes_to_hydraulics, res_mean_hydraulics, []),
@@ -198,7 +207,7 @@ def extract_branch_results_with_internals(net, branch_results, table_name,
             # single from_node that is the exterior node (e.g. junction vs. internal pipe_node)
             # result has to be extracted from the node_pit
             end_nodes = branch_results[node_name][f:t]
-            end_nodes_external = node_pit[end_nodes, TABLE_IDX_NODE] == ext_node_tbl_idx
+            end_nodes_external = node_pit[end_nodes, TABLE_IDX_NODE] != ext_node_tbl_idx
             considered = end_nodes_external & comp_connected
             external_active = comp_connected[end_nodes_external]
             for res_name, entry in res_ext:
