@@ -1,25 +1,8 @@
 import numpy as np
 
 from pandapipes.constants import NORMAL_TEMPERATURE
-from pandapipes.idx_branch import (LENGTH, D, K, RE, LAMBDA, LOAD_VEC_BRANCHES,
-                                   JAC_DERIV_DM, JAC_DERIV_DP, JAC_DERIV_DP1, JAC_DERIV_DM_NODE,
-                                   T_OUT_OLD,
-                                   FROM_NODE, TO_NODE, TOUTINIT, TEXT, AREA, ALPHA, TL, QEXT,
-                                   LOAD_VEC_BRANCHES_T, JAC_DERIV_DT, JAC_DERIV_DT_NODE,
-                                   LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO,
-                                   LOAD_VEC_NODES_FROM_T,
-                                   LOAD_VEC_NODES_TO_T, JAC_DERIV_DTOUT, JAC_DERIV_DTOUT_NODE,
-                                   MDOTINIT)
-from pandapipes.idx_node import (
-    TINIT as TINIT_NODE,
-    INFEED,
-    LOAD_T,
-    LOAD,
-    JAC_DERIV_DT_LOAD,
-    JAC_DERIV_DT_SLACK,
-    MDOTSLACKINIT,
-    TINIT_OLD,
-)
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected, \
     _sum_by_group
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
@@ -50,14 +33,17 @@ def calculate_derivatives_hydraulic(net, branch_pit, node_pit, options):
 
     # Darcy Friction factor: lambda
     lambda_, re = calc_lambda(
-        branch_pit[:, MDOTINIT], eta, branch_pit[:, D],
-        branch_pit[:, K], gas_mode, friction_model, branch_pit[:, LENGTH], options, branch_pit[:, AREA])
-    der_lambda = calc_der_lambda(branch_pit[:, MDOTINIT], eta,
-                                 branch_pit[:, D], branch_pit[:, K], friction_model, lambda_, branch_pit[:, AREA])
-    branch_pit[:, RE] = re
-    branch_pit[:, LAMBDA] = lambda_
-    from_nodes = branch_pit[:, FROM_NODE].astype(np.int32)
-    to_nodes = branch_pit[:, TO_NODE].astype(np.int32)
+        branch_pit[:, IdxBranch.MDOTINIT], eta, branch_pit[:, IdxBranch.D],
+        branch_pit[:, IdxBranch.K], gas_mode, friction_model, branch_pit[:, IdxBranch.LENGTH],
+        options, branch_pit[:, IdxBranch.AREA])
+    der_lambda = calc_der_lambda(branch_pit[:, IdxBranch.MDOTINIT], eta,
+                                 branch_pit[:, IdxBranch.D], branch_pit[:, IdxBranch.K],
+                                 friction_model, lambda_, branch_pit[:, IdxBranch.AREA])
+    branch_pit[:, IdxBranch.RE] = re
+    branch_pit[:, IdxBranch.LAMBDA] = lambda_
+
+    from_nodes = branch_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+    to_nodes = branch_pit[:, IdxBranch.TO_NODE].astype(np.int32)
     tinit_branch, height_difference, p_init_i_abs, p_init_i1_abs = \
         get_derived_values(node_pit, from_nodes, to_nodes, options["use_numba"])
 
@@ -66,12 +52,40 @@ def calculate_derivatives_hydraulic(net, branch_pit, node_pit, options):
             from pandapipes.pf.derivative_toolbox_numba import derivatives_hydraulic_incomp_numba \
                 as derivatives_hydraulic_incomp
         else:
-            from pandapipes.pf.derivative_toolbox import derivatives_hydraulic_incomp_np \
-                as derivatives_hydraulic_incomp
+            from pandapipes.pf.derivative_toolbox import derivatives_hydraulic_incomp_np_branches \
+                as derivatives_hydraulic_incomp_branches
+            from pandapipes.pf.derivative_toolbox import derivatives_hydraulic_incomp_np_nodes \
+                as derivatives_hydraulic_incomp_nodes
 
-        load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1 = (
-            derivatives_hydraulic_incomp(
-            branch_pit, der_lambda, p_init_i_abs, p_init_i1_abs, height_difference, rho))
+        f, df_dp_f, df_dp_t, df_dm, df_dmslack_f, df_dmslack_t = \
+            derivatives_hydraulic_incomp_branches(branch_pit, der_lambda,
+                                                  der_lambda, p_init_i_abs, p_init_i1_abs, height_difference, rho)
+
+        branch_pit[:, IdxBranch.F_B] = f
+        branch_pit[:, IdxBranch.DF_DM_B] = df_dm
+        branch_pit[:, IdxBranch.DF_DP_F_B] = df_dp_f
+        branch_pit[:, IdxBranch.DF_DP_T_B] = df_dp_t
+        branch_pit[:, IdxBranch.DF_DMSLACK_F_B] = df_dmslack_f
+        branch_pit[:, IdxBranch.DF_DMSLACK_T_B] = df_dmslack_t
+
+        f1_f, f1_t, df1_dm_f, df1_dm_t, df1_dp, df1_dmslack, \
+        f2_f, f2_t, df2_dm_f, df2_dm_t, df2_dp, df2_dmslack = \
+            derivatives_hydraulic_incomp_nodes(branch_pit, der_lambda)
+
+        branch_pit[:, IdxBranch.F1_F_N] = f1_f
+        branch_pit[:, IdxBranch.F1_T_N] = f1_t
+        branch_pit[:, IdxBranch.DF1_DM_F_N] = df1_dm_f
+        branch_pit[:, IdxBranch.DF1_DM_T_N] = df1_dm_t
+        node_pit[:, IdxNode.DF1_DP_N] = df1_dp
+        node_pit[:, IdxNode.DF1_DMSLACK_N] = df1_dmslack
+        
+        branch_pit[:, IdxBranch.F2_F_N] = f2_f
+        branch_pit[:, IdxBranch.F2_T_N] = f2_t
+        branch_pit[:, IdxBranch.DF2_DM_F_N] = df2_dm_f
+        branch_pit[:, IdxBranch.DF2_DM_T_N] = df2_dm_t
+        node_pit[:, IdxNode.DF2_DP_N] = df2_dp
+        node_pit[:, IdxNode.DF2_DMSLACK_N] = df2_dmslack
+
     else:
         if options["use_numba"]:
             from pandapipes.pf.derivative_toolbox_numba import derivatives_hydraulic_comp_numba \
@@ -89,75 +103,76 @@ def calculate_derivatives_hydraulic(net, branch_pit, node_pit, options):
         der_comp1 = fluid.get_der_compressibility() * der_p_m1
         load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1 = (
             derivatives_hydraulic_comp(
-            node_pit, branch_pit, lambda_, der_lambda, p_init_i_abs, p_init_i1_abs, height_difference,
+            node_pit, branch_pit, der_lambda, p_init_i_abs, p_init_i1_abs, height_difference,
             comp_fact, der_comp, der_comp1, rho, rho_n))
 
-    branch_pit[:, LOAD_VEC_BRANCHES] = load_vec
-    branch_pit[:, JAC_DERIV_DM] = df_dm
-    branch_pit[:, JAC_DERIV_DP] = df_dp
-    branch_pit[:, JAC_DERIV_DP1] = df_dp1
-    branch_pit[:, LOAD_VEC_NODES_FROM] = load_vec_nodes_from
-    branch_pit[:, LOAD_VEC_NODES_TO] = load_vec_nodes_to
-    branch_pit[:, JAC_DERIV_DM_NODE] = df_dm_nodes
+    branch_pit[:, IdxBranch.LOAD_VEC_BRANCHES] = load_vec
+    branch_pit[:, IdxBranch.JAC_DERIV_DM] = df_dm
+    branch_pit[:, IdxBranch.JAC_DERIV_DP] = df_dp
+    branch_pit[:, IdxBranch.JAC_DERIV_DP1] = df_dp1
+    branch_pit[:, IdxBranch.LOAD_VEC_NODES_FROM] = load_vec_nodes_from
+    branch_pit[:, IdxBranch.LOAD_VEC_NODES_TO] = load_vec_nodes_to
+    branch_pit[:, IdxBranch.JAC_DERIV_DM_NODE] = df_dm_nodes
 
 
 def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
     fluid = get_fluid(net)
     cp = get_branch_cp(fluid, node_pit, branch_pit)
-    m_init_i = np.abs(branch_pit[:, MDOTINIT])
-    m_init_i1 = np.abs(branch_pit[:, MDOTINIT])
+    m_init_i = np.abs(branch_pit[:, IdxBranch.MDOTINIT])
+    m_init_i1 = np.abs(branch_pit[:, IdxBranch.MDOTINIT])
     from_nodes = get_from_nodes_corrected(branch_pit)
     to_nodes = get_to_nodes_corrected(branch_pit)
-    t_init_i = node_pit[from_nodes, TINIT_NODE]
-    t_init_i1 = branch_pit[:, TOUTINIT]
-    t_init_n = node_pit[:, TINIT_NODE]
+    t_init_i = node_pit[from_nodes, IdxNode.TINIT]
+    t_init_i1 = branch_pit[:, IdxBranch.TOUTINIT]
+    t_init_n = node_pit[:, IdxNode.TINIT]
     cp_i = fluid.get_heat_capacity(t_init_i)
     cp_i1 = fluid.get_heat_capacity(t_init_i1)
     cp_n = fluid.get_heat_capacity(t_init_n)
-    t_amb = branch_pit[:, TEXT]
-    length = branch_pit[:, LENGTH]
-    alpha = branch_pit[:, ALPHA] * np.pi * branch_pit[:, D]
-    tl = branch_pit[:, TL]
-    qext = branch_pit[:, QEXT]
+    t_amb = branch_pit[:, IdxBranch.TEXT]
+    length = branch_pit[:, IdxBranch.LENGTH]
+    alpha = branch_pit[:, IdxBranch.ALPHA] * np.pi * branch_pit[:, IdxBranch.D]
+    tl = branch_pit[:, IdxBranch.TL]
+    qext = branch_pit[:, IdxBranch.QEXT]
     infeed_node = None
 
-    node_pit[:, LOAD_T] = node_pit[:, LOAD] * cp_n * t_init_n + node_pit[:, MDOTSLACKINIT] * cp_n * t_init_n
-    node_pit[:, JAC_DERIV_DT_LOAD] = - node_pit[:, LOAD] * cp_n
-    node_pit[:, JAC_DERIV_DT_SLACK] = - node_pit[:, MDOTSLACKINIT] * cp_n
+    node_pit[:, IdxNode.LOAD_T] = (node_pit[:, IdxNode.LOAD] * cp_n * t_init_n +
+                                   node_pit[:, IdxNode.MDOTSLACKINIT] * cp_n * t_init_n)
+    node_pit[:, IdxNode.JAC_DERIV_DT_LOAD] = - node_pit[:, IdxNode.LOAD] * cp_n
+    node_pit[:, IdxNode.JAC_DERIV_DT_SLACK] = - node_pit[:, IdxNode.MDOTSLACKINIT] * cp_n
 
-    branch_pit[:, JAC_DERIV_DT_NODE] = - m_init_i * cp_i
-    branch_pit[:, JAC_DERIV_DTOUT_NODE] = m_init_i1 * cp_i1
-    branch_pit[:, LOAD_VEC_NODES_FROM_T] = m_init_i1 * t_init_i * cp_i
-    branch_pit[:, LOAD_VEC_NODES_TO_T] = m_init_i1 * t_init_i1 * cp_i1
+    branch_pit[:, IdxBranch.JAC_DERIV_DT_NODE] = - m_init_i * cp_i
+    branch_pit[:, IdxBranch.JAC_DERIV_DTOUT_NODE] = m_init_i1 * cp_i1
+    branch_pit[:, IdxBranch.LOAD_VEC_N_FROM_T] = m_init_i1 * t_init_i * cp_i
+    branch_pit[:, IdxBranch.LOAD_VEC_N_TO_T] = m_init_i1 * t_init_i1 * cp_i1
 
     if get_net_option(net, "transient"):
         rho = get_branch_real_density(fluid, node_pit, branch_pit)
-        area = branch_pit[:, AREA]
-        tvor = branch_pit[:, T_OUT_OLD]
+        area = branch_pit[:, IdxBranch.AREA]
+        tvor = branch_pit[:, IdxBranch.T_OUT_OLD]
         delta_t = get_net_option(net, "dt")
 
-        branch_pit[:, LOAD_VEC_BRANCHES_T] = (
+        branch_pit[:, IdxBranch.LOAD_VEC_B_T] = (
                 rho * area * cp * (t_init_i1 - tvor) * (1 / delta_t) * length
                 + cp * m_init_i * (-t_init_i + t_init_i1 - tl)
                 - alpha * (t_amb - t_init_i1) * length + qext
         )
 
-        branch_pit[:, JAC_DERIV_DT] = - cp * m_init_i
-        branch_pit[:, JAC_DERIV_DTOUT] = rho * area * cp / delta_t * length + cp * m_init_i + alpha
+        branch_pit[:, IdxBranch.JAC_DERIV_DT] = - cp * m_init_i
+        branch_pit[:, IdxBranch.JAC_DERIV_DTOUT] = rho * area * cp / delta_t * length + cp * m_init_i + alpha
 
         branches_active_ht = get_lookup(net, "branch", "active_heat_transfer")
         branches_zero_fl = get_lookup(net, "branch", "zero_flow")[branches_active_ht]
         if np.any(branches_zero_fl):
             # TODO: maybe replace this statement with a component lookup
-            zero_length = np.isclose(branch_pit[:, LENGTH], 0, rtol=1e-6, atol=1e-10)
+            zero_length = np.isclose(branch_pit[:, IdxBranch.LENGTH], 0, rtol=1e-6, atol=1e-10)
             mask = zero_length & branches_zero_fl
             if np.any(mask):
-                branch_pit[mask, LOAD_VEC_BRANCHES_T] = (
+                branch_pit[mask, IdxBranch.LOAD_VEC_B_T] = (
                         rho[mask] * area[mask] * cp[mask] * (t_init_i1[mask] - tvor[mask]) * (1 / delta_t)
                         - alpha[mask] * (t_amb[mask] - t_init_i1[mask]) + qext[mask]
                 )
-                branch_pit[mask, JAC_DERIV_DT] = 0
-                branch_pit[mask, JAC_DERIV_DTOUT] = (rho[mask] * area[mask] * cp[mask] / delta_t +
+                branch_pit[mask, IdxBranch.JAC_DERIV_DT] = 0
+                branch_pit[mask, IdxBranch.JAC_DERIV_DTOUT] = (rho[mask] * area[mask] * cp[mask] / delta_t +
                                                      alpha[mask])
 
         nodes_active_ht = get_lookup(net, "node", "active_heat_transfer")
@@ -167,9 +182,9 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
             fn_zero = nodes_zero_fl[from_nodes]
             tn_zero = nodes_zero_fl[to_nodes]
 
-            t_from_node_vor_zero = node_pit[from_nodes[fn_zero], TINIT_OLD]
-            t_to_node_vor_zero = node_pit[to_nodes[tn_zero], TINIT_OLD]
-            t_to_node = node_pit[to_nodes[tn_zero], TINIT_NODE]
+            t_from_node_vor_zero = node_pit[from_nodes[fn_zero], IdxNode.TINIT_OLD]
+            t_to_node_vor_zero = node_pit[to_nodes[tn_zero], IdxNode.TINIT_OLD]
+            t_to_node = node_pit[to_nodes[tn_zero], IdxNode.TINIT]
 
             fn_eq = (rho[fn_zero] * area[fn_zero] * cp[fn_zero] * (1 / delta_t)
                      * (t_init_i[fn_zero] - t_from_node_vor_zero)
@@ -192,18 +207,18 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
                 to_nodes[tn_zero], tn_eq, tn_deriv
             )
 
-            node_pit[nodes_zero_fl, LOAD_T] = 0
-            node_pit[fn_nodes, LOAD_T] += fn_eq_sum
-            node_pit[tn_nodes, LOAD_T] += tn_eq_sum
-            node_pit[nodes_zero_fl, JAC_DERIV_DT_LOAD] = 0
-            node_pit[fn_nodes, JAC_DERIV_DT_LOAD] -= fn_deriv_sum
-            node_pit[tn_nodes, JAC_DERIV_DT_LOAD] -= tn_deriv_sum
-            node_pit[nodes_zero_fl, JAC_DERIV_DT_SLACK] = 0
+            node_pit[nodes_zero_fl, IdxNode.LOAD_T] = 0
+            node_pit[fn_nodes, IdxNode.LOAD_T] += fn_eq_sum
+            node_pit[tn_nodes, IdxNode.LOAD_T] += tn_eq_sum
+            node_pit[nodes_zero_fl, IdxNode.JAC_DERIV_DT_LOAD] = 0
+            node_pit[fn_nodes, IdxNode.JAC_DERIV_DT_LOAD] -= fn_deriv_sum
+            node_pit[tn_nodes, IdxNode.JAC_DERIV_DT_LOAD] -= tn_deriv_sum
+            node_pit[nodes_zero_fl, IdxNode.JAC_DERIV_DT_SLACK] = 0
 
-            branch_pit[fn_zero, JAC_DERIV_DT_NODE] = 0
-            branch_pit[tn_zero, JAC_DERIV_DTOUT_NODE] = 0
-            branch_pit[fn_zero, LOAD_VEC_NODES_FROM_T] = 0
-            branch_pit[tn_zero, LOAD_VEC_NODES_TO_T] = 0
+            branch_pit[fn_zero, IdxBranch.JAC_DERIV_DT_NODE] = 0
+            branch_pit[tn_zero, IdxBranch.JAC_DERIV_DTOUT_NODE] = 0
+            branch_pit[fn_zero, IdxBranch.LOAD_VEC_N_FROM_T] = 0
+            branch_pit[tn_zero, IdxBranch.LOAD_VEC_N_TO_T] = 0
 
             from_nodes_not_zero = from_nodes[~nodes_zero_fl[from_nodes]]
             to_nodes_not_zero = to_nodes[~nodes_zero_fl[to_nodes]]
@@ -213,15 +228,15 @@ def calculate_derivatives_thermal(net, branch_pit, node_pit, _):
         t_m = (t_init_i1 + t_init_i) / 2
         m_m = (m_init_i + m_init_i1) / 2
 
-        branch_pit[:, JAC_DERIV_DT] = - cp * m_m + alpha / 2 * length
-        branch_pit[:, JAC_DERIV_DTOUT] = cp * m_m + alpha / 2 * length
-        branch_pit[:, LOAD_VEC_BRANCHES_T] = cp * m_m * (-t_init_i + t_init_i1 - tl) - alpha * (
+        branch_pit[:, IdxBranch.JAC_DERIV_DT] = - cp * m_m + alpha / 2 * length
+        branch_pit[:, IdxBranch.JAC_DERIV_DTOUT] = cp * m_m + alpha / 2 * length
+        branch_pit[:, IdxBranch.LOAD_VEC_B_T] = cp * m_m * (-t_init_i + t_init_i1 - tl) - alpha * (
                     t_amb - t_m) * length + qext
 
     if infeed_node is None:
         infeed_node = np.setdiff1d(from_nodes, to_nodes)
-    node_pit[:, INFEED] = False
-    node_pit[infeed_node, INFEED] = True
+    node_pit[:, IdxNode.INFEED] = False
+    node_pit[infeed_node, IdxNode.INFEED] = True
 
     # This approach can be used if you consider the effect of sources with given temperature (checkout issue #656)
 

@@ -6,8 +6,8 @@ import numpy as np
 
 from pandapipes.component_models.abstract_models.branch_wo_internals_models import BranchWOInternalsComponent
 from pandapipes.component_models.component_toolbox import set_fixed_node_entries, standard_branch_wo_internals_result_lookup
-from pandapipes.idx_branch import D, AREA, LOAD_VEC_BRANCHES_T, TO_NODE, TOUTINIT, JAC_DERIV_DT, JAC_DERIV_DTOUT, MDOTINIT
-from pandapipes.idx_node import MDOTSLACKINIT, VAR_MASS_SLACK, JAC_DERIV_MSL, NODE_TYPE_T, GE, TINIT
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
@@ -86,8 +86,8 @@ class CirculationPump(BranchWOInternalsComponent):
         p_values = circ_pump_tbl.p_flow_bar.values
         index_p = set_fixed_node_entries(
             net, node_pit, junction, types, p_values, cls.get_connected_node_type(), 'p')
-        node_pit[index_p, JAC_DERIV_MSL] = -1.
-        node_pit[index_p, NODE_TYPE_T] = GE
+        node_pit[index_p, IdxNode.DF2_DMSLACK_N] = -1.
+        node_pit[index_p, IdxNode.NODE_TYPE_T] = IdxNode.GE
         return circ_pump_tbl, p_values
 
     @classmethod
@@ -102,9 +102,9 @@ class CirculationPump(BranchWOInternalsComponent):
         """
         circ_pump_tbl = net[cls.table_name()][net[cls.table_name()][cls.active_identifier()].values]
         circ_pump_pit = super().create_pit_branch_entries(net, branch_pit)
-        circ_pump_pit[:, D] = 0.1
-        circ_pump_pit[:, AREA] = circ_pump_pit[:, D] ** 2 * np.pi / 4
-        circ_pump_pit[:, TOUTINIT] = circ_pump_tbl.t_flow_k.values
+        circ_pump_pit[:, IdxBranch.D] = 0.1
+        circ_pump_pit[:, IdxBranch.AREA] = circ_pump_pit[:, IdxBranch.D] ** 2 * np.pi / 4
+        circ_pump_pit[:, IdxBranch.TOUTINIT] = circ_pump_tbl.t_flow_k.values
         return circ_pump_pit
 
     @classmethod
@@ -119,9 +119,9 @@ class CirculationPump(BranchWOInternalsComponent):
         """
         f, t = idx_lookups[cls.table_name()]
         circ_pump_pit = branch_pit[f:t, :]
-        tn = circ_pump_pit[:, TO_NODE].astype(np.int32)
-        mask = node_pit[tn, VAR_MASS_SLACK].astype(bool)
-        node_pit[tn[~mask], MDOTSLACKINIT] = 0
+        tn = circ_pump_pit[:, IdxBranch.TO_NODE].astype(np.int32)
+        mask = node_pit[tn, IdxNode.VAR_MASS_SLACK].astype(bool)
+        node_pit[tn[~mask], IdxNode.MDOTSLACKINIT] = 0
         return circ_pump_pit
 
     @classmethod
@@ -136,9 +136,9 @@ class CirculationPump(BranchWOInternalsComponent):
         """
         f, t = idx_lookups[cls.table_name()]
         circ_pump_pit = branch_pit[f:t, :]
-        circ_pump_pit[:, LOAD_VEC_BRANCHES_T] = 0
-        circ_pump_pit[:, JAC_DERIV_DTOUT] = 1
-        circ_pump_pit[:, JAC_DERIV_DT] = 0
+        circ_pump_pit[:, IdxBranch.LOAD_VEC_B_T] = 0
+        circ_pump_pit[:, IdxBranch.JAC_DERIV_DTOUT] = 1
+        circ_pump_pit[:, IdxBranch.JAC_DERIV_DT] = 0
 
 
     @classmethod
@@ -161,7 +161,7 @@ class CirculationPump(BranchWOInternalsComponent):
         branch_lookups = get_lookup(net, "branch", "from_to")
         f, t = branch_lookups[cls.table_name()]
 
-        mask = (branch_pit[f:t, MDOTINIT] < 0) & ~np.isclose(branch_pit[f:t, MDOTINIT], 0)
+        mask = (branch_pit[f:t, IdxBranch.MDOTINIT] < 0) & ~np.isclose(branch_pit[f:t, IdxBranch.MDOTINIT], 0)
         if np.any(mask):
             raise UserWarning(r'Your grid is badly modelled and would lead to a direction change in circulation pump %s'
                               % str(net[cls.table_name()].index[mask].tolist()))
@@ -174,8 +174,8 @@ class CirculationPump(BranchWOInternalsComponent):
         res_table = net["res_" + cls.table_name()]
 
         from_nodes = get_from_nodes_corrected(branch_pit[f:t])
-        t_from = node_pit[from_nodes, TINIT]
-        tout = branch_pit[f:t, TOUTINIT]
+        t_from = node_pit[from_nodes, IdxNode.TINIT]
+        tout = branch_pit[f:t, IdxBranch.TOUTINIT]
         res_table['deltat_k'].values[:] = t_from - tout
 
         fluid = get_fluid(net)
@@ -183,5 +183,5 @@ class CirculationPump(BranchWOInternalsComponent):
         cp_i = fluid.get_heat_capacity(t_from)
         cp_i1 = fluid.get_heat_capacity(tout)
 
-        mass = branch_pit[f:t, MDOTINIT]
+        mass = branch_pit[f:t, IdxBranch.MDOTINIT]
         res_table['qext_w'].values[:] = mass * (cp_i1 * tout - cp_i * t_from)

@@ -9,7 +9,7 @@ from pandapipes.component_models import standard_branch_wo_internals_result_look
 from pandapipes.component_models.abstract_models.branch_wo_internals_models import \
     BranchWOInternalsComponent
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import QEXT, D, AREA, LOSS_COEFFICIENT as LC
+from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.pipeflow_setup import get_fluid
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
 
@@ -52,8 +52,8 @@ class HeatExchanger(BranchWOInternalsComponent):
         :return: No Output.
         """
         heat_exchanger_pit = super().create_pit_branch_entries(net, branch_pit)
-        heat_exchanger_pit[:, LC] = net[cls.table_name()].loss_coefficient.values
-        heat_exchanger_pit[:, QEXT] = net[cls.table_name()].qext_w.values
+        heat_exchanger_pit[:, IdxBranch.LOSS_COEFFICIENT] = net[cls.table_name()].loss_coefficient.values
+        heat_exchanger_pit[:, IdxBranch.QEXT] = net[cls.table_name()].qext_w.values
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):

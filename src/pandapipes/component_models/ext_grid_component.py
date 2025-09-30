@@ -8,7 +8,7 @@ from numpy import dtype
 from pandapipes.component_models.abstract_models.node_element_models import NodeElementComponent
 from pandapipes.component_models.component_toolbox import set_fixed_node_entries
 from pandapipes.pf.pipeflow_setup import get_lookup
-from pandapipes.idx_node import MDOTSLACKINIT, VAR_MASS_SLACK, JAC_DERIV_MSL
+from pandapipes.idx_node import IdxNode
 
 try:
     import pandaplan.core.pplog as logging
@@ -61,8 +61,8 @@ class ExtGrid(NodeElementComponent):
         index_p = set_fixed_node_entries(
             net, node_pit, junction, types, p_values, cls.get_connected_node_type(), 'p')
         set_fixed_node_entries(net, node_pit, junction, types, t_values, cls.get_connected_node_type(), 't')
-        node_pit[index_p, JAC_DERIV_MSL] = -1.
-        node_pit[index_p, VAR_MASS_SLACK] = True
+        node_pit[index_p, IdxNode.DF2_DMSLACK_N] = -1.
+        node_pit[index_p, IdxNode.VAR_MASS_SLACK] = True
         return ext_grids, p_values
 
     @classmethod
@@ -96,7 +96,7 @@ class ExtGrid(NodeElementComponent):
         eg_nodes = get_lookup(net, "node", "index")[cls.get_connected_node_type().table_name()][
             junction[p_grids]]
         node_uni, inverse_nodes, counts = np.unique(eg_nodes, return_counts=True, return_inverse=True)
-        sum_mass_flows = node_pit[node_uni, MDOTSLACKINIT]
+        sum_mass_flows = node_pit[node_uni, IdxNode.MDOTSLACKINIT]
 
         # positive results mean that the ext_grid feeds in, negative means that the ext grid
         # extracts (like a load)

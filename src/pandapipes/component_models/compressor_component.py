@@ -8,8 +8,8 @@ from numpy import dtype
 from pandapipes.component_models.component_toolbox import get_component_array
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.component_models.pump_component import Pump
-from pandapipes.idx_branch import MDOTINIT, D, AREA, LOSS_COEFFICIENT as LC, FROM_NODE, PL
-from pandapipes.idx_node import PINIT, PAMB
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 
 
 class Compressor(Pump):
@@ -40,7 +40,7 @@ class Compressor(Pump):
         :return: No Output.
         """
         compressor_pit = super(Pump, cls).create_pit_branch_entries(net, branch_pit)
-        compressor_pit[:, LC] = 0
+        compressor_pit[:, IdxBranch.LOSS_COEFFICIENT] = 0
 
     @classmethod
     def create_component_array(cls, net, component_pits):
@@ -67,16 +67,16 @@ class Compressor(Pump):
         compressor_branch_pit = branch_pit[f:t, :]
         compressor_array = get_component_array(net, cls.table_name())
 
-        from_nodes = compressor_branch_pit[:, FROM_NODE].astype(np.int32)
-        p_from = node_pit[from_nodes, PAMB] + node_pit[from_nodes, PINIT]
+        from_nodes = compressor_branch_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+        p_from = node_pit[from_nodes, IdxNode.PAMB] + node_pit[from_nodes, IdxNode.PINIT]
 
         p_to_calc = p_from * compressor_array[:, cls.PRESSURE_RATIO]
         pl_abs = p_to_calc - p_from
 
-        m_mps = compressor_branch_pit[:, MDOTINIT]
+        m_mps = compressor_branch_pit[:, IdxBranch.MDOTINIT]
         pl_abs[m_mps < 0] = 0  # force pressure lift = 0 for reverse flow
 
-        compressor_branch_pit[:, PL] = pl_abs
+        compressor_branch_pit[:, IdxBranch.PL] = pl_abs
 
     @classmethod
     def get_component_input(cls):

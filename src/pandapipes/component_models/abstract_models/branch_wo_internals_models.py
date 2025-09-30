@@ -5,9 +5,8 @@
 import numpy as np
 
 from pandapipes.component_models.abstract_models.branch_models import BranchComponent
-from pandapipes.idx_branch import (FROM_NODE, TO_NODE, TOUTINIT, ELEMENT_IDX, ACTIVE, T_OUT_OLD, LENGTH, K, TEXT, ALPHA,
-                                   D, AREA)
-from pandapipes.idx_node import TINIT as TINIT_NODE
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_net_option, get_lookup
 
 try:
@@ -93,19 +92,19 @@ class BranchWOInternalsComponent(BranchComponent):
             return branch_wo_internals_pit
 
         if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
-            branch_wo_internals_pit[:, FROM_NODE] = from_nodes
-            branch_wo_internals_pit[:, TO_NODE] = to_nodes
-            branch_wo_internals_pit[:, TOUTINIT] = node_pit[to_nodes, TINIT_NODE]
-            branch_wo_internals_pit[:, ELEMENT_IDX] = net[cls.table_name()].index.values
-            branch_wo_internals_pit[:, ACTIVE] = net[cls.table_name()][cls.active_identifier()].values
-            branch_wo_internals_pit[:, LENGTH] = 0
-            branch_wo_internals_pit[:, K] = 1000
-            branch_wo_internals_pit[:, TEXT] = 293.15
-            branch_wo_internals_pit[:, ALPHA] = 0
-            branch_wo_internals_pit[:, D] = 0.1
-            branch_wo_internals_pit[:, AREA] = branch_wo_internals_pit[:, D] ** 2 * np.pi / 4
+            branch_wo_internals_pit[:, IdxBranch.FROM_NODE] = from_nodes
+            branch_wo_internals_pit[:, IdxBranch.TO_NODE] = to_nodes
+            branch_wo_internals_pit[:, IdxBranch.TOUTINIT] = node_pit[to_nodes, IdxNode.TINIT]
+            branch_wo_internals_pit[:, IdxBranch.ELEMENT_IDX] = net[cls.table_name()].index.values
+            branch_wo_internals_pit[:, IdxBranch.ACTIVE] = net[cls.table_name()][cls.active_identifier()].values
+            branch_wo_internals_pit[:, IdxBranch.LENGTH] = 0
+            branch_wo_internals_pit[:, IdxBranch.K] = 1000
+            branch_wo_internals_pit[:, IdxBranch.TEXT] = 293.15
+            branch_wo_internals_pit[:, IdxBranch.ALPHA] = 0
+            branch_wo_internals_pit[:, IdxBranch.D] = 0.1
+            branch_wo_internals_pit[:, IdxBranch.AREA] = branch_wo_internals_pit[:, IdxBranch.D] ** 2 * np.pi / 4
         if get_net_option(net, "transient"):
-            branch_wo_internals_pit[:, T_OUT_OLD] = branch_wo_internals_pit[:, TOUTINIT]
+            branch_wo_internals_pit[:, IdxBranch.T_OUT_OLD] = branch_wo_internals_pit[:, IdxBranch.TOUTINIT]
         return branch_wo_internals_pit
 
     @classmethod

@@ -5,39 +5,48 @@
 import numpy as np
 from numpy import linalg
 
-from pandapipes.constants import P_CONVERSION, GRAVITATION_CONSTANT, NORMAL_PRESSURE, \
-    NORMAL_TEMPERATURE
-from pandapipes.idx_branch import LENGTH, LAMBDA, D, LOSS_COEFFICIENT as LC, PL, AREA, \
-    MDOTINIT, TOUTINIT, FROM_NODE
-from pandapipes.idx_node import HEIGHT, PINIT, PAMB, TINIT as TINIT_NODE
+from pandapipes.constants import P_CONVERSION, GRAVITATION_CONSTANT
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 
-
-def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init_i1_abs,
-                                    height_difference, rho):
+def derivatives_hydraulic_incomp_np_branches(branch_pit, length_pit,
+                                             der_lambda, p_init_i_abs, p_init_i1_abs, height_difference, rho):
     # Formulas for pressure loss in incompressible flow
     # Use medium density ((rho_from + rho_to) / 2) for Darcy Weisbach according to
     # https://www.schweizer-fn.de/rohr/rohrleitung/rohrleitung.php#fluessigkeiten
-    m_init_abs = np.abs(branch_pit[:, MDOTINIT])
-    m_init2 = m_init_abs * branch_pit[:, MDOTINIT]
     p_diff = p_init_i_abs - p_init_i1_abs
+    m_init_abs = np.abs(branch_pit[:, IdxBranch.MDOTINIT])
+    m_init2 = m_init_abs * branch_pit[:, IdxBranch.MDOTINIT]
+    const_term = np.divide(1, branch_pit[:, IdxBranch.AREA] ** 2 * rho * P_CONVERSION * 2)
     const_height = rho * GRAVITATION_CONSTANT * height_difference / P_CONVERSION
-    friction_term = np.divide(branch_pit[:, LENGTH] * branch_pit[:, LAMBDA], branch_pit[:, D]) + branch_pit[:, LC]
-    const_term = np.divide(1, branch_pit[:, AREA] ** 2 * rho * P_CONVERSION * 2)
+    friction_term = np.divide(branch_pit[:, IdxBranch.LENGTH] * branch_pit[:, IdxBranch.LAMBDA],
+                              branch_pit[:, IdxBranch.D]) + branch_pit[:, IdxBranch.LOSS_COEFFICIENT]
 
+    f = p_diff + branch_pit[:, IdxBranch.PL] + const_height - const_term * m_init2 * friction_term
+    df_dp_f = np.ones_like(length_pit)
+    df_dp_t = np.ones_like(length_pit) * (-1)
     df_dm = - const_term * (2 * m_init_abs * friction_term + der_lambda
-                            * np.divide(branch_pit[:, LENGTH], branch_pit[:, D]) * m_init2)
+                            * np.divide(branch_pit[:, IdxBranch.LENGTH], branch_pit[:, IdxBranch.D]) * m_init2)
+    df_dmslack_f = np.zeros_like(length_pit)
+    df_dmslack_t = np.zeros_like(length_pit)
+    return f, df_dp_f, df_dp_t, df_dm, df_dmslack_f, df_dmslack_t
 
-    load_vec = p_diff + branch_pit[:, PL] + const_height - const_term * m_init2 * friction_term
+def derivatives_hydraulic_incomp_np_nodes(branch_pit, length_pit):
+    f1_f = - branch_pit[:, IdxBranch.MDOTINIT]
+    f1_t = branch_pit[:, IdxBranch.MDOTINIT]
+    df1_dm_f = - np.ones_like(length_pit)
+    df1_dm_t = np.ones_like(length_pit)
+    df1_dp = np.zeros_like(length_pit)
+    df1_dmslack = np.zeros_like(length_pit)
 
-    df_dp = np.ones_like(der_lambda)
-    df_dp1 = np.ones_like(der_lambda) * (-1)
-
-    df_dm_nodes = np.ones_like(der_lambda)
-
-    load_vec_nodes_from = branch_pit[:, MDOTINIT]
-    load_vec_nodes_to = branch_pit[:, MDOTINIT]
-
-    return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1
+    f2_f = - branch_pit[:, IdxBranch.MDOTINIT]
+    f2_t = branch_pit[:, IdxBranch.MDOTINIT]
+    df2_dm_f = - np.ones_like(length_pit)
+    df2_dm_t = np.ones_like(length_pit)
+    df2_dp = np.zeros_like(length_pit)
+    df2_dmslack = np.ones_like(length_pit)
+    return f1_f, f1_t, df1_dm_f, df1_dm_t, df1_dp, df1_dmslack, \
+           f2_f, f2_t, df2_dm_f, df2_dm_t, df2_dp, df2_dmslack
 
 
 def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_init_i_abs, p_init_i1_abs,
@@ -71,7 +80,6 @@ def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_i
     load_vec_nodes_to = branch_pit[:, MDOTINIT]
 
     return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1
-
 
 def calc_lambda_nikuradse_incomp_np(m, d, k, eta, area):
     m_abs = np.abs(m)
@@ -170,8 +178,8 @@ def colebrook_np(re, d, k, lambda_nikuradse, dummy, max_iter):
 
 
 def calc_derived_values_np(node_pit, from_nodes, to_nodes):
-    tinit_branch = (node_pit[from_nodes, TINIT_NODE] + node_pit[to_nodes, TINIT_NODE]) / 2
-    height_difference = node_pit[from_nodes, HEIGHT] - node_pit[to_nodes, HEIGHT]
-    p_init_i_abs = node_pit[from_nodes, PINIT] + node_pit[from_nodes, PAMB]
-    p_init_i1_abs = node_pit[to_nodes, PINIT] + node_pit[to_nodes, PAMB]
+    tinit_branch = (node_pit[from_nodes, IdxNode.TINIT] + node_pit[to_nodes, IdxNode.TINIT]) / 2
+    height_difference = node_pit[from_nodes,IdxNode. HEIGHT] - node_pit[to_nodes, IdxNode.HEIGHT]
+    p_init_i_abs = node_pit[from_nodes, IdxNode.PINIT] + node_pit[from_nodes, IdxNode.PAMB]
+    p_init_i1_abs = node_pit[to_nodes, IdxNode.PINIT] + node_pit[to_nodes, IdxNode.PAMB]
     return tinit_branch, height_difference, p_init_i_abs, p_init_i1_abs

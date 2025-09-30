@@ -8,8 +8,8 @@ from numpy import dtype
 from pandapipes.component_models.abstract_models.branch_w_internals_models import BranchWInternalsComponent
 from pandapipes.component_models.component_toolbox import standard_branch_wo_internals_result_lookup
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import LENGTH, K, TEXT, ALPHA, FROM_NODE, TO_NODE, TOUTINIT
-from pandapipes.idx_node import TINIT as TINIT_NODE, HEIGHT, PINIT, ACTIVE as ACTIVE_ND, PAMB, TINIT_OLD
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.pipeflow_setup import get_fluid, get_net_option, get_lookup
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
 
@@ -86,13 +86,13 @@ class Valve(BranchWInternalsComponent):
                 junct_pit_index = junction_indices[from_junctions]
                 fj_nodes = np.repeat(junct_pit_index, int_node_number)
 
-                int_node_pit[:, TINIT_NODE] = junction_pit[fj_nodes, TINIT_NODE]
-                int_node_pit[:, HEIGHT] = junction_pit[fj_nodes, HEIGHT]
-                int_node_pit[:, PINIT] = junction_pit[fj_nodes, PINIT]
-                int_node_pit[:, PAMB] = junction_pit[fj_nodes, PAMB]
-                int_node_pit[:, ACTIVE_ND] = junction_pit[fj_nodes, ACTIVE_ND]
+                int_node_pit[:, IdxNode.TINIT] = junction_pit[fj_nodes, IdxNode.TINIT]
+                int_node_pit[:, IdxNode.HEIGHT] = junction_pit[fj_nodes, IdxNode.HEIGHT]
+                int_node_pit[:, IdxNode.PINIT] = junction_pit[fj_nodes, IdxNode.PINIT]
+                int_node_pit[:, IdxNode.PAMB] = junction_pit[fj_nodes, IdxNode.PAMB]
+                int_node_pit[:, IdxNode.ACTIVE] = junction_pit[fj_nodes, IdxNode.ACTIVE]
             if get_net_option(net, "transient"):
-                int_node_pit[:, TINIT_OLD] = int_node_pit[:, TINIT_NODE].astype(np.float64)
+                int_node_pit[:, IdxNode.TINIT_OLD] = int_node_pit[:, IdxNode.TINIT].astype(np.float64)
 
     @classmethod
     def create_pit_branch_entries(cls, net, branch_pit):
@@ -123,23 +123,23 @@ class Valve(BranchWInternalsComponent):
                 pipes = pipe_idx_lookup[to_elements[mask_p_uni]]
 
                 internal = net['_lookups']['internal_branches']['pipe']
-                fn_pipe = pipe_pit[internal[pipes, 0], FROM_NODE]
+                fn_pipe = pipe_pit[internal[pipes, 0], IdxBranch.FROM_NODE]
                 fp = np.where(fn_pipe == from_nodes[mask_p_uni], True, False)
 
                 f, t = get_lookup(net, "node", "from_to")['valve_nodes']
                 valve_nodes = np.arange(f, t)
-                pipe_pit[internal[pipes[fp], 0], FROM_NODE] = valve_nodes[fp]
-                pipe_pit[internal[pipes[~fp], 1], TO_NODE] = valve_nodes[~fp]
+                pipe_pit[internal[pipes[fp], 0], IdxBranch.FROM_NODE] = valve_nodes[fp]
+                pipe_pit[internal[pipes[~fp], 1], IdxBranch.TO_NODE] = valve_nodes[~fp]
 
                 to_nodes[mask_p] = valve_nodes[inverse_index]
 
-            valve_pit[:, FROM_NODE] = from_nodes
-            valve_pit[:, TO_NODE] = to_nodes
-            valve_pit[:, TOUTINIT] = node_pit[to_nodes, TINIT_NODE]
-            valve_pit[:, LENGTH] = 0
-            valve_pit[:, K] = 1000
-            valve_pit[:, TEXT] = 293.15
-            valve_pit[:, ALPHA] = 0
+            valve_pit[:, IdxBranch.FROM_NODE] = from_nodes
+            valve_pit[:, IdxBranch.TO_NODE] = to_nodes
+            valve_pit[:, IdxBranch.TOUTINIT] = node_pit[to_nodes, IdxNode.TINIT]
+            valve_pit[:, IdxBranch.LENGTH] = 0
+            valve_pit[:, IdxBranch.K] = 1000
+            valve_pit[:, IdxBranch.TEXT] = 293.15
+            valve_pit[:, IdxBranch.ALPHA] = 0
 
     @classmethod
     def get_component_input(cls):

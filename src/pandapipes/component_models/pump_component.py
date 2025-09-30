@@ -16,8 +16,8 @@ from pandapipes.component_models.component_toolbox import (
 )
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE, R_UNIVERSAL, P_CONVERSION
-from pandapipes.idx_branch import MDOTINIT, AREA, LOSS_COEFFICIENT as LC, FROM_NODE, PL
-from pandapipes.idx_node import PINIT, PAMB, TINIT as TINIT_NODE
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.pipeflow_setup import get_fluid, get_net_option, get_lookup
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
 
@@ -65,7 +65,7 @@ class Pump(BranchWOInternalsComponent):
         :return: No Output.
         """
         pump_pit = super().create_pit_branch_entries(net, branch_pit)
-        pump_pit[:, LC] = 0
+        pump_pit[:, IdxBranch.LOSS_COEFFICIENT] = 0
 
     @classmethod
     def create_component_array(cls, net, component_pits):
@@ -93,20 +93,20 @@ class Pump(BranchWOInternalsComponent):
         # calculation of pressure lift
         f, t = idx_lookups[cls.table_name()]
         pump_branch_pit = branch_pit[f:t, :]
-        area = pump_branch_pit[:, AREA]
+        area = pump_branch_pit[:, IdxBranch.AREA]
 
         pump_array = get_component_array(net, cls.table_name())
         idx = pump_array[:, cls.STD_TYPE].astype(np.int32)
         std_types = get_std_type_lookup(net, cls.table_name())[idx]
 
-        from_nodes = pump_branch_pit[:, FROM_NODE].astype(np.int32)
+        from_nodes = pump_branch_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
         # to_nodes = pump_branch_pit[:, TO_NODE].astype(np.int32)
         fluid = get_fluid(net)
-        p_from = node_pit[from_nodes, PAMB] + node_pit[from_nodes, PINIT]
-        # p_to = node_pit[to_nodes, PAMB] + node_pit[to_nodes, PINIT]
-        t_from = node_pit[from_nodes, TINIT_NODE]
+        p_from = node_pit[from_nodes, IdxNode.PAMB] + node_pit[from_nodes, IdxNode.PINIT]
+        # p_to = node_pit[to_nodes, IdxNode.PAMB] + node_pit[to_nodes, IdxNode.PINIT]
+        t_from = node_pit[from_nodes, IdxNode.TINIT]
         numerator_from = NORMAL_PRESSURE * t_from
-        v_mps = pump_branch_pit[:, MDOTINIT] / pump_branch_pit[:, AREA] / fluid.get_density(NORMAL_TEMPERATURE)
+        v_mps = pump_branch_pit[:, IdxBranch.MDOTINIT] / pump_branch_pit[:, IdxBranch.AREA] / fluid.get_density(NORMAL_TEMPERATURE)
         if fluid.is_gas:
             # consider volume flow at inlet
             normfactor_from = numerator_from * fluid.get_property("compressibility", p_from) \
@@ -119,7 +119,7 @@ class Pump(BranchWOInternalsComponent):
             fcts = itemgetter(*std_types)(net['std_types']['pump'])
             fcts = [fcts] if not isinstance(fcts, tuple) else fcts
             pl = np.array(list(map(lambda x, y: x.get_pressure(y), fcts, vol)))
-            pump_branch_pit[:, PL] = pl
+            pump_branch_pit[:, IdxBranch.PL] = pl
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
@@ -152,7 +152,7 @@ class Pump(BranchWOInternalsComponent):
             if net.fluid.is_gas:
                 p_from = branch_results["p_abs_from"][f:t]
                 p_to = branch_results["p_abs_to"][f:t]
-                t0 = net["_pit"]["node"][from_nodes, TINIT_NODE]
+                t0 = net["_pit"]["node"][from_nodes, IdxNode.TINIT]
                 mf_sum_int = branch_results["mf_from"][f:t]
                 # calculate ideal compression power
                 compr = get_fluid(net).get_property("compressibility", p_from)

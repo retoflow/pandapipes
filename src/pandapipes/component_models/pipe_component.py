@@ -10,9 +10,8 @@ from pandapipes.component_models.abstract_models import BranchWInternalsComponen
 from pandapipes.component_models.component_toolbox import set_entry_check_repeat, vinterp, p_correction_height_air
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE
-from pandapipes.idx_branch import FROM_NODE, TO_NODE, LENGTH, D, AREA, K, MDOTINIT, ALPHA, QEXT, TEXT, TOUTINIT, \
-    T_OUT_OLD
-from pandapipes.idx_node import (TINIT as TINIT_NODE, HEIGHT, PINIT, PAMB, ACTIVE as ACTIVE_ND, TINIT_OLD, )
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup, get_net_option
 from pandapipes.pf.result_extraction import extract_branch_results_with_internals, \
     extract_branch_results_without_internals
@@ -91,17 +90,17 @@ class Pipe(BranchWInternalsComponent):
                 tj_nodes = junction_indices[to_junctions]
 
 
-                int_node_pit[:, TINIT_NODE] = vinterp(junction_pit[fj_nodes, TINIT_NODE],
-                                                      junction_pit[tj_nodes, TINIT_NODE], int_node_number)
-                int_node_pit[:, HEIGHT] = vinterp(junction_pit[fj_nodes, HEIGHT], junction_pit[tj_nodes, HEIGHT],
+                int_node_pit[:, IdxNode.TINIT] = vinterp(junction_pit[fj_nodes, IdxNode.TINIT],
+                                                      junction_pit[tj_nodes, IdxNode.TINIT], int_node_number)
+                int_node_pit[:, IdxNode.HEIGHT] = vinterp(junction_pit[fj_nodes, IdxNode.HEIGHT], junction_pit[tj_nodes, IdxNode.HEIGHT],
                                                   int_node_number)
-                int_node_pit[:, PINIT] = vinterp(junction_pit[fj_nodes, PINIT], junction_pit[tj_nodes, PINIT],
+                int_node_pit[:, IdxNode.PINIT] = vinterp(junction_pit[fj_nodes, IdxNode.PINIT], junction_pit[tj_nodes, IdxNode.PINIT],
                                                  int_node_number)
-                int_node_pit[:, PAMB] = p_correction_height_air(int_node_pit[:, HEIGHT])
-                int_node_pit[:, ACTIVE_ND] = np.repeat(net[cls.table_name()][cls.active_identifier()].values,
+                int_node_pit[:, IdxNode.PAMB] = p_correction_height_air(int_node_pit[:, IdxNode.HEIGHT])
+                int_node_pit[:, IdxNode.ACTIVE] = np.repeat(net[cls.table_name()][cls.active_identifier()].values,
                                                        int_node_number)
             if get_net_option(net, "transient"):
-                int_node_pit[:, TINIT_OLD] = int_node_pit[:, TINIT_NODE].astype(np.float64)
+                int_node_pit[:, IdxNode.TINIT_OLD] = int_node_pit[:, IdxNode.TINIT].astype(np.float64)
 
 
     @classmethod
@@ -135,23 +134,23 @@ class Pipe(BranchWInternalsComponent):
                 from_nodes = np.insert(from_nodes, insert_places + 1, pipe_nodes_idx)
                 to_nodes = np.insert(to_nodes, insert_places, pipe_nodes_idx)
 
-            pipe_pit[:, FROM_NODE] = from_nodes
-            pipe_pit[:, TO_NODE] = to_nodes
-            pipe_pit[:, TOUTINIT] = node_pit[to_nodes, TINIT_NODE]
+            pipe_pit[:, IdxBranch.FROM_NODE] = from_nodes
+            pipe_pit[:, IdxBranch.TO_NODE] = to_nodes
+            pipe_pit[:, IdxBranch.TOUTINIT] = node_pit[to_nodes, IdxNode.TINIT]
 
             tbl = cls.table_name()
-            set_entry_check_repeat(pipe_pit, LENGTH, net[tbl].length_km.values * 1000 / internal_pipe_number,
+            set_entry_check_repeat(pipe_pit, IdxBranch.LENGTH, net[tbl].length_km.values * 1000 / internal_pipe_number,
                 internal_pipe_number, has_internals)
-            set_entry_check_repeat(pipe_pit, K, net[tbl].k_mm.values / 1000, internal_pipe_number, has_internals)
-            set_entry_check_repeat(pipe_pit, ALPHA, net[tbl].u_w_per_m2k.values, internal_pipe_number, has_internals)
-            set_entry_check_repeat(pipe_pit, QEXT, net[tbl].qext_w.values, internal_pipe_number, has_internals)
-            set_entry_check_repeat(pipe_pit, TEXT, net[tbl].text_k.values, internal_pipe_number, has_internals)
-            nan_mask = np.isnan(pipe_pit[:, TEXT])
-            pipe_pit[nan_mask, TEXT] = get_net_option(net, 'ambient_temperature')
-            pipe_pit[:, AREA] = pipe_pit[:, D] ** 2 * np.pi / 4
-            pipe_pit[:, MDOTINIT] *= pipe_pit[:, AREA] * get_fluid(net).get_density(NORMAL_TEMPERATURE)
+            set_entry_check_repeat(pipe_pit, IdxBranch.K, net[tbl].k_mm.values / 1000, internal_pipe_number, has_internals)
+            set_entry_check_repeat(pipe_pit, IdxBranch.ALPHA, net[tbl].u_w_per_m2k.values, internal_pipe_number, has_internals)
+            set_entry_check_repeat(pipe_pit, IdxBranch.QEXT, net[tbl].qext_w.values, internal_pipe_number, has_internals)
+            set_entry_check_repeat(pipe_pit, IdxBranch.TEXT, net[tbl].text_k.values, internal_pipe_number, has_internals)
+            nan_mask = np.isnan(pipe_pit[:, IdxBranch.TEXT])
+            pipe_pit[nan_mask, IdxBranch.TEXT] = get_net_option(net, 'ambient_temperature')
+            pipe_pit[:, IdxBranch.AREA] = pipe_pit[:, IdxBranch.D] ** 2 * np.pi / 4
+            pipe_pit[:, IdxBranch.MDOTINIT] *= pipe_pit[:, IdxBranch.AREA] * get_fluid(net).get_density(NORMAL_TEMPERATURE)
         if get_net_option(net, "transient"):
-            pipe_pit[:, T_OUT_OLD] = pipe_pit[:, TOUTINIT]
+            pipe_pit[:, IdxBranch.T_OUT_OLD] = pipe_pit[:, IdxBranch.TOUTINIT]
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
@@ -218,19 +217,19 @@ class Pipe(BranchWInternalsComponent):
             m_nodes = int_v_lookup[pipe_lookup_index]
             m_nodes = [np.arange(x, y + 1) for x,y in zip(m_nodes[:, 0], m_nodes[:, 1])]
 
-            v_pipe_data = pipe_pit[m_nodes, MDOTINIT] / fluid.get_density(NORMAL_TEMPERATURE) / pipe_pit[m_nodes, AREA]
-            p_node_data = node_pit[p_nodes, PINIT]
-            t_node_data = node_pit[p_nodes, TINIT_NODE]
+            v_pipe_data = pipe_pit[m_nodes, IdxBranch.MDOTINIT] / fluid.get_density(NORMAL_TEMPERATURE) / pipe_pit[m_nodes, IdxBranch.AREA]
+            p_node_data = node_pit[p_nodes, IdxNode.PINIT]
+            t_node_data = node_pit[p_nodes, IdxNode.TINIT]
 
             gas_mode = fluid.is_gas
 
             if gas_mode:
-                from_nodes = pipe_pit[m_nodes, FROM_NODE].astype(np.int32)
-                to_nodes = pipe_pit[m_nodes, TO_NODE].astype(np.int32)
-                p_from = node_pit[from_nodes, PAMB] + node_pit[from_nodes, PINIT]
-                p_to = node_pit[to_nodes, PAMB] + node_pit[to_nodes, PINIT]
+                from_nodes = pipe_pit[m_nodes, IdxBranch.FROM_NODE].astype(np.int32)
+                to_nodes = pipe_pit[m_nodes, IdxBranch.TO_NODE].astype(np.int32)
+                p_from = node_pit[from_nodes, IdxNode.PAMB] + node_pit[from_nodes, IdxNode.PINIT]
+                p_to = node_pit[to_nodes, IdxNode.PAMB] + node_pit[to_nodes, IdxNode.PINIT]
                 p_mean = np.where(p_from == p_to, p_from, 2 / 3 * (p_from ** 3 - p_to ** 3) / (p_from ** 2 - p_to ** 2))
-                numerator = NORMAL_PRESSURE * node_pit[m_nodes, TINIT_NODE]
+                numerator = NORMAL_PRESSURE * node_pit[m_nodes, IdxNode.TINIT]
                 normfactor_mean = numerator * fluid.get_property("compressibility", p_mean) / (
                             p_mean * NORMAL_TEMPERATURE)
                 normfactor_from = numerator * fluid.get_property("compressibility", p_from) / (
@@ -328,14 +327,14 @@ class Pipe(BranchWInternalsComponent):
         from_junction_nodes = junction_idx_lookup[net[cls.table_name()]["from_junction"].values]
         to_junction_nodes = junction_idx_lookup[net[cls.table_name()]["to_junction"].values]
         p_values = np.zeros(len(pipe_p_data[0]) + 2)
-        p_values[0] = node_pit[from_junction_nodes[pipe], PINIT]
+        p_values[0] = node_pit[from_junction_nodes[pipe], IdxNode.PINIT]
         p_values[1:-1] = pipe_p_data[:]
-        p_values[-1] = node_pit[to_junction_nodes[pipe], PINIT]
+        p_values[-1] = node_pit[to_junction_nodes[pipe], IdxNode.PINIT]
 
         t_values = np.zeros(len(pipe_t_data[0]) + 2)
-        t_values[0] = node_pit[from_junction_nodes[pipe], TINIT_NODE]
+        t_values[0] = node_pit[from_junction_nodes[pipe], IdxNode.TINIT]
         t_values[1:-1] = pipe_t_data[:]
-        t_values[-1] = node_pit[to_junction_nodes[pipe], TINIT_NODE]
+        t_values[-1] = node_pit[to_junction_nodes[pipe], IdxNode.TINIT]
 
         v_values = pipe_v_data[0, :]
 

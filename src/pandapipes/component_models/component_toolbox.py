@@ -8,9 +8,8 @@ import pandas as pd
 from pandapipes import get_fluid
 from pandapipes.constants import NORMAL_PRESSURE, TEMP_GRADIENT_KPM, AVG_TEMPERATURE_K, \
     HEIGHT_EXPONENT
-from pandapipes.idx_branch import LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO, FROM_NODE, TO_NODE
-from pandapipes.idx_node import (EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T,
-                                 PINIT, NODE_TYPE, P, TINIT, NODE_TYPE_T, T, LOAD)
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
 from pandapipes.pf.internals_toolbox import _sum_by_group
 
@@ -149,10 +148,10 @@ def set_fixed_node_entries(net, node_pit, junctions, types, values, node_comp, m
 
     if mode == "p":
         val_col, type_col, count_col, typ, valid_types, values = \
-            PINIT, NODE_TYPE, EXT_GRID_OCCURENCE, P, ["p", "pt"], values
+            IdxNode.PINIT, IdxNode.NODE_TYPE, IdxNode.EXT_GRID_OCCURENCE, IdxNode.P, ["p", "pt"], values
     elif mode == "t":
         val_col, type_col, count_col, typ, valid_types, values = \
-            TINIT, NODE_TYPE_T, EXT_GRID_OCCURENCE_T, T, ["t", "pt"], values
+            IdxNode.TINIT, IdxNode.NODE_TYPE_T, IdxNode.EXT_GRID_OCCURENCE_T, IdxNode.T, ["t", "pt"], values
     else:
         raise UserWarning(r'The mode %s is not supported. Choose either mode "p" or "t"' % mode)
 
@@ -174,13 +173,13 @@ def set_fixed_node_entries(net, node_pit, junctions, types, values, node_comp, m
 
 def get_mass_flow_at_nodes(net, node_pit, branch_pit, eg_nodes, comp):
     node_uni, inverse_nodes, counts = np.unique(eg_nodes, return_counts=True, return_inverse=True)
-    eg_from_branches = np.isin(branch_pit[:, FROM_NODE], node_uni)
-    eg_to_branches = np.isin(branch_pit[:, TO_NODE], node_uni)
-    from_nodes = branch_pit[eg_from_branches, FROM_NODE]
-    to_nodes = branch_pit[eg_to_branches, TO_NODE]
-    mass_flow_from = branch_pit[eg_from_branches, LOAD_VEC_NODES_FROM]
-    mass_flow_to = branch_pit[eg_to_branches, LOAD_VEC_NODES_TO]
-    loads = node_pit[node_uni, LOAD]
+    eg_from_branches = np.isin(branch_pit[:, IdxBranch.FROM_NODE], node_uni)
+    eg_to_branches = np.isin(branch_pit[:, IdxBranch.TO_NODE], node_uni)
+    from_nodes = branch_pit[eg_from_branches, IdxBranch.FROM_NODE]
+    to_nodes = branch_pit[eg_to_branches, IdxBranch.TO_NODE]
+    mass_flow_from = branch_pit[eg_from_branches, IdxBranch.F1_F_N]
+    mass_flow_to = branch_pit[eg_to_branches, IdxBranch.F1_T_N]
+    loads = node_pit[node_uni, IdxNode.LOAD]
     all_index_nodes = np.concatenate([from_nodes, to_nodes, node_uni])
     all_mass_flows = np.concatenate([-mass_flow_from, mass_flow_to, -loads])
     nodes, sum_mass_flows = _sum_by_group(get_net_option(net, "use_numba"), all_index_nodes,

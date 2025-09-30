@@ -3,9 +3,8 @@ from numpy import linalg
 
 from pandapipes.constants import P_CONVERSION, GRAVITATION_CONSTANT, NORMAL_PRESSURE, \
     NORMAL_TEMPERATURE
-from pandapipes.idx_branch import LENGTH, LAMBDA, D, LOSS_COEFFICIENT as LC, PL, AREA, \
-    MDOTINIT, FROM_NODE, TO_NODE, TOUTINIT
-from pandapipes.idx_node import HEIGHT, PAMB, PINIT, TINIT as TINIT_NODE
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 
 try:
     from numba import jit
@@ -13,6 +12,21 @@ try:
 except ImportError:
     from pandapower.pf.no_numba import jit
     from numpy import int32, float64, int64
+
+MDOTINIT = IdxBranch.MDOTINIT
+LAMBDA = IdxBranch.LAMBDA
+LENGTH = IdxBranch.LENGTH
+LC = IdxBranch.LOSS_COEFFICIENT
+AREA = IdxBranch.AREA
+D = IdxBranch.D
+PL = IdxBranch.PL
+FROM_NODE = IdxBranch.FROM_NODE
+TOUTINIT = IdxBranch.TOUTINIT
+
+TINIT = IdxNode.TINIT
+HEIGHT = IdxNode.HEIGHT
+PAMB = IdxNode.PAMB
+PINIT = IdxNode.PINIT
 
 
 @jit((float64[:, :], float64[:], float64[:], float64[:], float64[:], float64[:]), nopython=True, cache=False)
@@ -69,7 +83,7 @@ def derivatives_hydraulic_comp_numba(node_pit, branch_pit, lambda_, der_lambda, 
         p_sum = p_init_i_abs[i] + p_init_i1_abs[i]
         p_sum_div = np.divide(1, p_sum)
         fn = from_nodes[i]
-        tm = (node_pit[fn, TINIT_NODE] + branch_pit[i][TOUTINIT]) / 2
+        tm = (node_pit[fn, TINIT] + branch_pit[i][TOUTINIT]) / 2
 
         const_height =  rho[i] * GRAVITATION_CONSTANT * height_difference[i] / P_CONVERSION
         friction_term = np.divide(lambda_[i] * branch_pit[i][LENGTH], branch_pit[i][D]) + \
@@ -84,7 +98,7 @@ def derivatives_hydraulic_comp_numba(node_pit, branch_pit, lambda_, der_lambda, 
         df_dp[i] = 1. - const_term * p_sum_div * (der_comp[i] - comp_fact[i] * p_sum_div)
         df_dp1[i] = -1. - const_term * p_sum_div * (der_comp1[i] - comp_fact[i] * p_sum_div)
 
-        df_dm[i] = -1. * normal_term * comp_fact[i] * p_sum_div * tm * (2 * m_init_abs * friction_term \
+        df_dm[i] = -1. * normal_term * comp_fact[i] * p_sum_div * tm * (2 * m_init_abs * friction_term
             + np.divide(der_lambda[i] * branch_pit[i][LENGTH] * m_init2, branch_pit[i][D]))
 
         load_vec_nodes_from[i] = branch_pit[i][MDOTINIT]
@@ -185,7 +199,7 @@ def calc_derived_values_numba(node_pit, from_nodes, to_nodes):
     for i in range(le):
         fn = from_nodes[i]
         tn = to_nodes[i]
-        tinit_branch[i] = (node_pit[fn, TINIT_NODE] + node_pit[tn, TINIT_NODE]) / 2
+        tinit_branch[i] = (node_pit[fn, TINIT] + node_pit[tn, TINIT]) / 2
         height_difference[i] = node_pit[fn, HEIGHT] - node_pit[tn, HEIGHT]
         p_init_i_abs[i] = node_pit[fn, PINIT] + node_pit[fn, PAMB]
         p_init_i1_abs[i] = node_pit[tn, PINIT] + node_pit[tn, PAMB]

@@ -10,8 +10,7 @@ from pandapipes.properties import get_fluid
 from pandapipes.component_models.component_toolbox import \
     standard_branch_wo_internals_result_lookup, get_component_array
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import (JAC_DERIV_DP, JAC_DERIV_DP1, JAC_DERIV_DM, MDOTINIT, LOAD_VEC_BRANCHES,
-                                   FLOW_RETURN_CONNECT)
+from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
 
 
@@ -50,8 +49,8 @@ class FlowControlComponent(BranchWOInternalsComponent):
         :return: No Output.
         """
         fc_branch_pit = super().create_pit_branch_entries(net, branch_pit)
-        fc_branch_pit[:, MDOTINIT] = net[cls.table_name()].controlled_mdot_kg_per_s.values
-        fc_branch_pit[net[cls.table_name()].control_active, FLOW_RETURN_CONNECT] = True
+        fc_branch_pit[:, IdxBranch.MDOTINIT] = net[cls.table_name()].controlled_mdot_kg_per_s.values
+        fc_branch_pit[net[cls.table_name()].control_active, IdxBranch.FLOW_RETURN_CONNECT] = True
 
     @classmethod
     def create_component_array(cls, net, component_pits):
@@ -80,10 +79,10 @@ class FlowControlComponent(BranchWOInternalsComponent):
         fc_branch_pit = branch_pit[f:t, :]
         fc_array = get_component_array(net, cls.table_name())
         active = fc_array[:, cls.CONTROL_ACTIVE].astype(np.bool_)
-        fc_branch_pit[active, JAC_DERIV_DP] = 0
-        fc_branch_pit[active, JAC_DERIV_DP1] = 0
-        fc_branch_pit[active, JAC_DERIV_DM] = 1
-        fc_branch_pit[active, LOAD_VEC_BRANCHES] = 0
+        fc_branch_pit[active, IdxBranch.DF_DP_F_B] = 0
+        fc_branch_pit[active, IdxBranch.DF_DP_T_B] = 0
+        fc_branch_pit[active, IdxBranch.DF_DM_B] = 1
+        fc_branch_pit[active, IdxBranch.F_B] = 0
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):

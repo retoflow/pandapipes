@@ -7,7 +7,7 @@ from numpy import dtype
 
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.component_models.pipe_component import Pipe
-from pandapipes.idx_branch import LENGTH, K, D, AREA, LOSS_COEFFICIENT as LC
+from pandapipes.idx_branch import IdxBranch
 from pandapipes.properties.fluids import get_fluid
 
 
@@ -45,13 +45,12 @@ class ValvePipe(Pipe):
         :return:
         :rtype:
         """
-        comp_pit[:, LENGTH] = np.repeat(net[cls.table_name].length_km.values * 1000 /
-                                        internal_pipe_number, internal_pipe_number)
-        comp_pit[:, K] = np.repeat(net[cls.table_name].k_mm.values / 1000,
-                                   internal_pipe_number)
-        comp_pit[:, D] = np.repeat(net[cls.table_name].diameter_m.values, internal_pipe_number)
-        comp_pit[:, AREA] = comp_pit[:, D] ** 2 * np.pi / 4
-        comp_pit[:, LC] = np.repeat(net[cls.table_name].loss_coefficient.values,
+        comp_pit[:, IdxBranch.LENGTH] = np.repeat(net[cls.table_name].length_km.values * 1000 /
+                                                  internal_pipe_number, internal_pipe_number)
+        comp_pit[:, IdxBranch.K] = np.repeat(net[cls.table_name].k_mm.values / 1000, internal_pipe_number)
+        comp_pit[:, IdxBranch.D] = np.repeat(net[cls.table_name].diameter_m.values, internal_pipe_number)
+        comp_pit[:, IdxBranch.AREA] = comp_pit[:, IdxBranch.D] ** 2 * np.pi / 4
+        comp_pit[:, IdxBranch.LOSS_COEFFICIENT] = np.repeat(net[cls.table_name].loss_coefficient.values,
                                     internal_pipe_number)
 
     @classmethod

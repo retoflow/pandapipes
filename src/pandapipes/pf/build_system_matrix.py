@@ -5,13 +5,8 @@
 import numpy as np
 from scipy.sparse import csr_matrix
 
-from pandapipes.idx_branch import (FROM_NODE, TO_NODE, JAC_DERIV_DM, JAC_DERIV_DP, JAC_DERIV_DP1, \
-    JAC_DERIV_DM_NODE, LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO, LOAD_VEC_BRANCHES, JAC_DERIV_DT, JAC_DERIV_DTOUT,
-    PC as PC_BRANCH, JAC_DERIV_DT_NODE, JAC_DERIV_DTOUT_NODE, LOAD_VEC_NODES_FROM_T, LOAD_VEC_NODES_TO_T, \
-    LOAD_VEC_BRANCHES_T, BRANCH_TYPE)
-
-from pandapipes.idx_node import (P, PC as PC_NODE, NODE_TYPE, T, NODE_TYPE_T, LOAD, LOAD_T, INFEED,
-                                 MDOTSLACKINIT, JAC_DERIV_MSL, JAC_DERIV_DT_SLACK, JAC_DERIV_DT_LOAD)
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.internals_toolbox import _sum_by_group_sorted, _sum_by_group, \
     get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_net_option

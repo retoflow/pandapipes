@@ -5,14 +5,10 @@
 import numpy as np
 
 from pandapipes.component_models.abstract_models.base_component import Component
-from pandapipes.idx_branch import (
-    MDOTINIT,
-    branch_cols,
-    TEXT,
-    FLOW_RETURN_CONNECT,
-)
+from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.pipeflow_setup import get_net_option
 from pandapipes.pf.pipeflow_setup import get_table_number, get_lookup
+from pandapipes.pf.pipeflow_toolbox import default_system_matrix_branch, default_system_matrix_node
 
 try:
     import pandaplan.core.pplog as logging
@@ -92,11 +88,21 @@ class BranchComponent(Component):
             return branch_component_pit, node_pit
 
         if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
-            branch_component_pit[:, :] = np.array([branch_table_nr] + [0] * (branch_cols - 1))
-            branch_component_pit[:, MDOTINIT] = 0.1
-            branch_component_pit[:, TEXT] = get_net_option(net, 'ambient_temperature')
-            branch_component_pit[:, FLOW_RETURN_CONNECT] = False
+            branch_component_pit[:, :] = np.array([branch_table_nr] + [0] * (IdxBranch.branch_cols - 1))
+            branch_component_pit[:, IdxBranch.MDOTINIT] = 0.1
+            branch_component_pit[:, IdxBranch.TEXT] = get_net_option(net, 'ambient_temperature')
+            branch_component_pit[:, IdxBranch.FLOW_RETURN_CONNECT] = False
         return branch_component_pit, node_pit
+
+    @classmethod
+    def extract_system_matrix_branch(cls, branch_pit, node_pit):
+        jacobian, columns, rows, res, res_rows = default_system_matrix_branch(branch_pit, node_pit)
+        return jacobian, columns, rows, res, res_rows
+
+    @classmethod
+    def extract_system_matrix_node(cls, branch_pit, node_pit):
+        jacobian, columns, rows, res, res_rows = default_system_matrix_node(branch_pit, node_pit)
+        return jacobian, columns, rows, res, res_rows
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):

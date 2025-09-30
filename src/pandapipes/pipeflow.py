@@ -6,8 +6,8 @@ import numpy as np
 from numpy import linalg
 from scipy.sparse.linalg import spsolve
 
-from pandapipes.idx_branch import MDOTINIT, TOUTINIT, FROM_NODE_T_SWITCHED
-from pandapipes.idx_node import PINIT, TINIT, MDOTSLACKINIT, NODE_TYPE, P
+from pandapipes.idx_branch import  IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.build_system_matrix import build_system_matrix
 from pandapipes.pf.derivative_calculation import (calculate_derivatives_hydraulic,
                                                   calculate_derivatives_thermal)
@@ -40,6 +40,189 @@ def set_logger_level_pipeflow(level):
     """
     logger.setLevel(level)
 
+class BaseCalc:
+    VARS = None
+    PITS = None
+    TOLS = None
+    ITER = None
+    MODE = None
+
+    @classmethod
+    def calc_initialization(cls, net, **kwargs):
+        # Init physical constants and options
+        init_options(net, **kwargs)
+        # init result tables
+        net.converged = False
+        init_all_result_tables(net)
+
+        create_lookups(net)
+        initialize_pit(net)
+
+    @classmethod
+    def active_components_identification(cls, net):
+        # TODO: This is not necessary in every time step, but we need the result! The result of the
+        #       connectivity check is currently not saved anywhere!
+        # cannot be moved to calculate_hydraulics as the active node/branch hydraulics lookup is also required to
+        # determine the active node/branch heat transfer lookup
+        identify_active_nodes_branches(net)
+
+    @classmethod
+    def result_extraction(cls, net):
+        extract_all_results(net, cls.MODE)
+
+    @classmethod
+    def function(cls, net):
+        raise NotImplementedError
+
+    @classmethod
+    def get_tolerances(cls, net):
+        tols = get_net_options(net, *cls.TOLS)
+        return tols
+
+    @classmethod
+    def calculation(cls, net):
+        raise NotImplementedError
+
+    @classmethod
+    def newton_raphson(cls, net):
+
+        max_iter, nonlinear_method, tol_res = get_net_options(
+            net, cls.ITER, "nonlinear_method", "tol_res"
+        )
+        niter = 0
+        # This branch is used to stop the solver after a specified error tolerance is reached
+        errors = {var: [] for var in cls.VARS}
+        create_internal_results(net)
+        residual_norm = None
+        # This loop is left as soon as the solver converged
+        # Assumes this loop is the Newton-Raphson iteration loop
+        # 1: ODE -> integrate to get function y(0)
+        # 2: Build Jacobian matrix df1/dx1, df1/dx2 etc. (this means take derivative of each variable x1,x2,x3...)
+        # 3: Consider initial guess for x1,x2,x3,... this is a vector x(0) = [x1,x2,x3,x4,]
+        # 4: Compute value of Jacobian at these guesses x(0) above
+        # 5: Take inverse of Jacobian (not always able to thus LU decomposition, spsolve...)
+        # 6: Evaluate function from step 1 at the initial guesses from step 3
+        # 7 The first iteration is the: initial_guess_vector - Jacobian@initial_guess * function vector@initial_guess
+        #                            x(1)   = x(0) - J^-1(x(0) *F(0)
+        # The repeat from step 3 again until error convergence
+        #                            x(2)   = x(1) - J^-1(x(1) *F(1)
+        # note: Jacobian equations don't change, just the X values subbed in at each iteration which
+        # makes the jacobian different
+        while not net.converged and niter < max_iter:
+            logger.debug("niter %d" % niter)
+
+            # solve_hydraulics is where the calculation takes place
+            results, residual = cls.function(net)
+            residual_norm = linalg.norm(residual / len(residual))
+            logger.debug("residual: %s" % residual_norm.round(4))
+            pos = np.arange(len(cls.VARS) * 2)
+            results = np.array(results, object)
+            vals_new = results[pos[::2]]
+            vals_old = results[pos[1::2]]
+            for var, val_new, val_old in zip(cls.VARS, vals_new, vals_old):
+                dval = val_new - val_old
+                errors[var].append(linalg.norm(dval) / len(dval) if len(dval) else 0)
+            finalize_iteration(
+                net, niter, residual_norm, nonlinear_method, errors=errors, tols=cls.get_tolerances, tol_res=tol_res,
+                vals_old=vals_old, solver_vars=cls.VARS, pit_names=cls.PITS
+            )
+            niter += 1
+        write_internal_results(net, **errors)
+        kwargs = dict()
+        kwargs['residual_norm_%s' % cls.MODE] = residual_norm
+        kwargs['iterations_%s' % cls.MODE] = niter
+        write_internal_results(net, **kwargs)
+        log_final_results(net, cls.MODE, niter, residual_norm, cls.VARS, cls.TOLS)
+
+    @classmethod
+    def main(cls, net, **kwargs):
+        cls.calc_initialization(net, **kwargs)
+        cls.active_components_identification(net)
+        cls.calculation(net, **kwargs)
+        cls.result_extraction(net)
+
+
+class PipeflowHydraulics(BaseCalc):
+
+    VARS = ['mdot', 'p', 'mdotslack']
+    PITS = ['BRANCH', 'NODE', 'NODE']
+    TOLS = ['tol_m', 'tol_m', 'tol_m']
+    ITER = 'max_iter_hyd'
+    MODE = 'hydraulics'
+
+    @classmethod
+    def function(cls, net):
+        solve_hydraulics(net)
+
+    @classmethod
+    def calculation(cls, net):
+        net.converged = False
+        reduce_pit(net, mode=cls.MODE)
+
+        if not get_net_option(net, "reuse_internal_data") or "_internal_data" not in net:
+            net["_internal_data"] = dict()
+
+        cls.newton_raphson(net)
+        if net.converged:
+            set_user_pf_options(net, hyd_flag=True)
+
+        if not get_net_option(net, "reuse_internal_data"):
+            net.pop("_internal_data", None)
+
+        if not net.converged:
+            msg = "The hydraulic calculation did not converge to a solution."
+            raise PipeflowNotConverged(msg)
+        extract_results_active_pit(net, mode=cls.MODE)
+
+
+class PipeflowHeat(BaseCalc):
+    VARS = ['Tout', 'T']
+    PITS = ['BRANCH', 'NODE']
+    TOLS = ['tol_T', 'tol_T']
+    ITER = 'max_iter_therm'
+    MODE = 'heat_transfer'
+
+    @classmethod
+    def function(cls, net):
+        solve_temperature(net)
+
+    @classmethod
+    def calculation(cls, net):
+        net.converged = False
+        identify_active_nodes_branches(net, False)
+        reduce_pit(net, mode=cls.MODE)
+
+        cls.newton_raphson(net)
+        if not net.converged:
+            msg = "The heat transfer calculation did not converge to a solution."
+            raise PipeflowNotConverged(msg)
+        extract_results_active_pit(net, mode=cls.MODE)
+
+
+class PipeflowBidirectional(BaseCalc):
+    VARS = ['mdot', 'p', 'TOUT', 'T']
+    PITS = ['BRANCH', 'NODE', 'BRANCH', 'NODE']
+    TOLS = ['tol_m', 'tol_p', 'tol_T', 'tol_T']
+    ITER = 'max_iter_bidirect'
+    MODE = 'bidirectional'
+
+    @classmethod
+    def function(cls, net):
+        solve_bidirectional(net)
+
+    @classmethod
+    def calculation(cls, net):
+        net.converged = False
+        if not get_net_option(net, "reuse_internal_data") or "_internal_data" not in net:
+            net["_internal_data"] = dict()
+        cls.newton_raphson(net)
+        if net.converged:
+            set_user_pf_options(net, hyd_flag=True)
+        if not get_net_option(net, "reuse_internal_data"):
+            net.pop("_internal_data", None)
+        if not net.converged:
+            raise PipeflowNotConverged("The bidrectional calculation did not converge to a solution.")
+
 
 def pipeflow(net, sol_vec=None, **kwargs):
     """
@@ -63,7 +246,6 @@ def pipeflow(net, sol_vec=None, **kwargs):
 
     # Init physical constants and options
     init_options(net, **kwargs)
-    calculation_mode = get_net_option(net, "mode")
 
     # init result tables
     net.converged = False
@@ -90,12 +272,12 @@ def pipeflow(net, sol_vec=None, **kwargs):
     if not (calculate_hydraulics | calculate_heat | calculate_bidrect):
         raise UserWarning("No proper calculation mode chosen.")
     elif calculate_bidrect:
-        bidirectional(net)
+        PipeflowBidirectional.calculation(net)
     else:
         if calculate_hydraulics:
-            hydraulics(net)
+            PipeflowHydraulics.calculation(net)
         if calculate_heat:
-            heat_transfer(net)
+            PipeflowHeat.calculation(net)
 
     extract_all_results(net, calculation_mode)
 
@@ -108,118 +290,8 @@ def use_given_hydraulic_results(net, sol_vec):
         raise UserWarning("Converged flag not set. Make sure that hydraulic calculation "
                           "results are available.")
     else:
-        node_pit[:, PINIT] = sol_vec[:len(node_pit)]
-        branch_pit[:, MDOTINIT] = sol_vec[len(node_pit):]
-
-
-def newton_raphson(net, funct, mode, solver_vars, tols, pit_names, iter_name):
-    max_iter, nonlinear_method, tol_res = get_net_options(
-        net, iter_name, "nonlinear_method", "tol_res"
-    )
-    niter = 0
-    # This branch is used to stop the solver after a specified error tolerance is reached
-    errors = {var: [] for var in solver_vars}
-    create_internal_results(net)
-    residual_norm = None
-    # This loop is left as soon as the solver converged
-    # Assumes this loop is the Newton-Raphson iteration loop
-    # 1: ODE -> integrate to get function y(0)
-    # 2: Build Jacobian matrix df1/dx1, df1/dx2 etc. (this means take derivative of each variable x1,x2,x3...)
-    # 3: Consider initial guess for x1,x2,x3,... this is a vector x(0) = [x1,x2,x3,x4,]
-    # 4: Compute value of Jacobian at these guesses x(0) above
-    # 5: Take inverse of Jacobian (not always able to thus LU decomposition, spsolve...)
-    # 6: Evaluate function from step 1 at the initial guesses from step 3
-    # 7 The first iteration is the: initial_guess_vector - Jacobian@initial_guess * function vector@initial_guess
-    #                            x(1)   = x(0) - J^-1(x(0) *F(0)
-    # The repeat from step 3 again until error convergence
-    #                            x(2)   = x(1) - J^-1(x(1) *F(1)
-    # note: Jacobian equations don't change, just the X values subbed in at each iteration which
-    # makes the jacobian different
-    while not net.converged and niter < max_iter:
-        logger.debug("niter %d" % niter)
-
-        # solve_hydraulics is where the calculation takes place
-        results, residual = funct(net)
-        residual_norm = linalg.norm(residual / len(residual))
-        logger.debug("residual: %s" % residual_norm.round(4))
-        pos = np.arange(len(solver_vars) * 2)
-        results = np.array(results, object)
-        vals_new = results[pos[::2]]
-        vals_old = results[pos[1::2]]
-        for var, val_new, val_old in zip(solver_vars, vals_new, vals_old):
-            dval = val_new - val_old
-            errors[var].append(linalg.norm(dval) / len(dval) if len(dval) else 0)
-        finalize_iteration(
-            net, niter, residual_norm, nonlinear_method, errors=errors, tols=tols, tol_res=tol_res,
-            vals_old=vals_old, solver_vars=solver_vars, pit_names=pit_names
-        )
-        niter += 1
-    write_internal_results(net, **errors)
-    kwargs = dict()
-    kwargs['residual_norm_%s' % mode] = residual_norm
-    kwargs['iterations_%s' % mode] = niter
-    write_internal_results(net, **kwargs)
-    log_final_results(net, mode, niter, residual_norm, solver_vars, tols)
-
-
-def bidirectional(net):
-    net.converged = False
-    if not get_net_option(net, "reuse_internal_data") or "_internal_data" not in net:
-        net["_internal_data"] = dict()
-    solver_vars = ['mdot', 'p', 'TOUT', 'T']
-    tol_m, tol_p, tol_temp = get_net_options(net, 'tol_m', 'tol_p', 'tol_T')
-    newton_raphson(
-        net, solve_bidirectional, 'bidirectional', solver_vars, [tol_m, tol_p, tol_temp, tol_temp],
-        ['branch', 'node', 'branch', 'node'], 'max_iter_bidirect'
-    )
-    if net.converged:
-        set_user_pf_options(net, hyd_flag=True)
-    if not get_net_option(net, "reuse_internal_data"):
-        net.pop("_internal_data", None)
-    if not net.converged:
-        raise PipeflowNotConverged("The bidrectional calculation did not converge to a solution.")
-
-
-def hydraulics(net):
-    # Start of nonlinear loop
-    # ---------------------------------------------------------------------------------------------
-    net.converged = False
-    reduce_pit(net, mode="hydraulics")
-    if not get_net_option(net, "reuse_internal_data") or "_internal_data" not in net:
-        net["_internal_data"] = dict()
-    solver_vars = ['mdot', 'p', 'mdotslack']
-    tol_p, tol_m, tol_msl = get_net_options(net, 'tol_m', 'tol_p', 'tol_m')
-    newton_raphson(net, solve_hydraulics, 'hydraulics', solver_vars, [tol_m, tol_p, tol_msl],
-                   ['branch', 'node', 'node'], 'max_iter_hyd')
-    if net.converged:
-        set_user_pf_options(net, hyd_flag=True)
-
-    if not get_net_option(net, "reuse_internal_data"):
-        net.pop("_internal_data", None)
-
-    if not net.converged:
-        msg = "The hydraulic calculation did not converge to a solution."
-        raise PipeflowNotConverged(msg)
-    extract_results_active_pit(net, mode="hydraulics")
-
-
-def heat_transfer(net):
-    # Start of nonlinear loop
-    # ---------------------------------------------------------------------------------------------
-    net.converged = False
-    identify_active_nodes_branches(net, False)
-    reduce_pit(net, mode="heat_transfer")
-    if net.fluid.is_gas:
-        logger.info("Caution! Temperature calculation does currently not affect hydraulic "
-                    "properties!")
-    solver_vars = ['Tout', 'T']
-    tol_temp = next(get_net_options(net, 'tol_T'))
-    newton_raphson(net, solve_temperature, 'heat', solver_vars, [tol_temp, tol_temp], ['branch', 'node'],
-                   'max_iter_therm')
-    if not net.converged:
-        msg = "The heat transfer calculation did not converge to a solution."
-        raise PipeflowNotConverged(msg)
-    extract_results_active_pit(net, mode="heat_transfer")
+        node_pit[:, IdxNode.PINIT] = sol_vec[:len(node_pit)]
+        branch_pit[:, IdxBranch.MDOTINIT] = sol_vec[len(node_pit):]
 
 
 def solve_bidirectional(net):
@@ -262,20 +334,20 @@ def solve_hydraulics(net):
     # jacobian is the derivatives
     jacobian, epsilon = build_system_matrix(net, branch_pit, node_pit, False)
 
-    m_init_old = branch_pit[:, MDOTINIT].copy()
-    p_init_old = node_pit[:, PINIT].copy()
-    slack_nodes = np.where(node_pit[:, NODE_TYPE] == P)[0]
-    msl_init_old = node_pit[slack_nodes, MDOTSLACKINIT].copy()
+    m_init_old = branch_pit[:, IdxBranch.MDOTINIT].copy()
+    p_init_old = node_pit[:, IdxNode.PINIT].copy()
+    slack_nodes = np.where(node_pit[:, IdxNode.NODE_TYPE] == IdxNode.P)[0]
+    msl_init_old = node_pit[slack_nodes, IdxNode.MDOTSLACKINIT].copy()
 
     # x is next step pressures and velocity
     x = spsolve(jacobian, epsilon)
 
-    branch_pit[:, MDOTINIT] -= x[len(node_pit):len(node_pit) + len(branch_pit)] * options["alpha"]
-    node_pit[:, PINIT] -= x[:len(node_pit)] * options["alpha"]
-    node_pit[slack_nodes, MDOTSLACKINIT] -= x[len(node_pit) + len(branch_pit):]
+    branch_pit[:, IdxBranch.MDOTINIT] -= x[len(node_pit):len(node_pit) + len(branch_pit)] * options["alpha"]
+    node_pit[:, IdxNode.PINIT] -= x[:len(node_pit)] * options["alpha"]
+    node_pit[slack_nodes, IdxNode.MDOTSLACKINIT] -= x[len(node_pit) + len(branch_pit):]
 
-    return [branch_pit[:, MDOTINIT], m_init_old, node_pit[:, PINIT], p_init_old, msl_init_old,
-            node_pit[slack_nodes, MDOTSLACKINIT]], epsilon
+    return [branch_pit[:, IdxBranch.MDOTINIT], m_init_old, node_pit[:, IdxNode.PINIT], p_init_old, msl_init_old,
+            node_pit[slack_nodes, IdxNode.MDOTSLACKINIT]], epsilon
 
 
 def solve_temperature(net):
@@ -298,7 +370,7 @@ def solve_temperature(net):
 
     # Negative velocity values are turned to positive ones (including exchange of from_node and
     # to_node for temperature calculation
-    branch_pit[:, FROM_NODE_T_SWITCHED] = branch_pit[:, MDOTINIT] < -2e-11
+    branch_pit[:, IdxBranch.FROM_NODE_T_SWITCHED] = branch_pit[:, IdxBranch.MDOTINIT] < -2e-11
 
     for comp in net['component_list']:
         comp.adaption_before_derivatives_thermal(net, branch_pit, node_pit, branch_lookups, options)
@@ -306,21 +378,21 @@ def solve_temperature(net):
     for comp in net['component_list']:
         comp.adaption_after_derivatives_thermal(net, branch_pit, node_pit, branch_lookups, options)
 
-    t_init_old = node_pit[:, TINIT].copy()
-    t_out_old = branch_pit[:, TOUTINIT].copy()
+    t_init_old = node_pit[:, IdxNode.TINIT].copy()
+    t_out_old = branch_pit[:, IdxBranch.TOUTINIT].copy()
 
     if not check_infeed_number(node_pit):
-        return [branch_pit[:, TOUTINIT], t_out_old, node_pit[:, TINIT], t_init_old], np.array([
+        return [branch_pit[:, IdxBranch.TOUTINIT], t_out_old, node_pit[:, IdxNode.TINIT], t_init_old], np.array([
             np.nan])
 
     jacobian, epsilon = build_system_matrix(net, branch_pit, node_pit, True)
 
     x = spsolve(jacobian, epsilon)
 
-    node_pit[:, TINIT] -= x[:len(node_pit)] * options["alpha"]
-    branch_pit[:, TOUTINIT] -= x[len(node_pit):] * options["alpha"]
+    node_pit[:, IdxNode.TINIT] -= x[:len(node_pit)] * options["alpha"]
+    branch_pit[:, IdxBranch.TOUTINIT] -= x[len(node_pit):] * options["alpha"]
 
-    return [branch_pit[:, TOUTINIT], t_out_old, node_pit[:, TINIT], t_init_old], epsilon
+    return [branch_pit[:, IdxBranch.TOUTINIT], t_out_old, node_pit[:, IdxNode.TINIT], t_init_old], epsilon
 
 
 def set_damping_factor(net, niter, errors):

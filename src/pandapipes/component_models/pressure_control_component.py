@@ -9,9 +9,8 @@ from pandapipes.component_models.abstract_models.branch_wo_internals_models impo
     BranchWOInternalsComponent
 from pandapipes.component_models import standard_branch_wo_internals_result_lookup
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import D, AREA, \
-    JAC_DERIV_DP, JAC_DERIV_DP1, JAC_DERIV_DM, BRANCH_TYPE, LOSS_COEFFICIENT as LC, PC as PC_BRANCH
-from pandapipes.idx_node import PINIT, NODE_TYPE, PC as PC_NODE
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.pipeflow_setup import get_lookup
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
 from pandapipes.properties.fluids import get_fluid
@@ -47,8 +46,8 @@ class PressureControlComponent(BranchWOInternalsComponent):
         junction_idx_lookups = get_lookup(net, "node", "index")[
             cls.get_connected_node_type().table_name()]
         index_pc = junction_idx_lookups[juncts]
-        node_pit[index_pc, NODE_TYPE] = PC_NODE
-        node_pit[index_pc, PINIT] = press
+        node_pit[index_pc, IdxNode.NODE_TYPE] = IdxNode.PC
+        node_pit[index_pc, IdxNode.PINIT] = press
 
     @classmethod
     def create_pit_branch_entries(cls, net, branch_pit):
@@ -61,8 +60,8 @@ class PressureControlComponent(BranchWOInternalsComponent):
         :return: No Output.
         """
         pc_pit = super().create_pit_branch_entries(net, branch_pit)
-        pc_pit[net[cls.table_name()].control_active.values, BRANCH_TYPE] = PC_BRANCH
-        pc_pit[:, LC] = net[cls.table_name()].loss_coefficient.values
+        pc_pit[net[cls.table_name()].control_active.values, IdxBranch.BRANCH_TYPE] = IdxBranch.PC
+        pc_pit[:, IdxBranch.LOSS_COEFFICIENT] = net[cls.table_name()].loss_coefficient.values
 
     @classmethod
     def adaption_before_derivatives_hydraulic(cls, net, branch_pit, node_pit, idx_lookups, options):
@@ -73,10 +72,10 @@ class PressureControlComponent(BranchWOInternalsComponent):
         # set all PC branches to derivatives to 0
         f, t = idx_lookups[cls.table_name()]
         press_pit = branch_pit[f:t, :]
-        pc_branch = press_pit[:, BRANCH_TYPE] == PC_BRANCH
-        press_pit[pc_branch, JAC_DERIV_DP] = 0
-        press_pit[pc_branch, JAC_DERIV_DP1] = 0
-        press_pit[pc_branch, JAC_DERIV_DM] = 0
+        pc_branch = press_pit[:, IdxBranch.BRANCH_TYPE] == IdxBranch.PC
+        press_pit[pc_branch, IdxBranch.DF_DP_F_B] = 0
+        press_pit[pc_branch, IdxBranch.DF_DP_T_B] = 0
+        press_pit[pc_branch, IdxBranch.DF_DM_B] = 0
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):

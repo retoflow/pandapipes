@@ -5,7 +5,7 @@
 import numpy as np
 import logging
 
-from pandapipes.idx_branch import FROM_NODE_T_SWITCHED, TO_NODE, FROM_NODE
+from pandapipes.idx_branch import IdxBranch
 
 try:
     from numba import jit
@@ -176,8 +176,9 @@ def get_from_nodes_corrected(branch_pit, switch_from_to_col=None):
     :rtype:
     """
     if switch_from_to_col is None:
-        switch_from_to_col = branch_pit[:, FROM_NODE_T_SWITCHED]
-    from_node_col = switch_from_to_col.astype(np.int32) * (TO_NODE - FROM_NODE) + FROM_NODE
+        switch_from_to_col = branch_pit[:, IdxBranch.FROM_NODE_T_SWITCHED]
+    from_node_col = (switch_from_to_col.astype(np.int32) *
+                     (IdxBranch.TO_NODE - IdxBranch.FROM_NODE) + IdxBranch.FROM_NODE)
     return branch_pit[np.arange(len(branch_pit)), from_node_col].astype(np.int32)
 
 
@@ -198,6 +199,7 @@ def get_to_nodes_corrected(branch_pit, switch_from_to_col=None):
     :rtype:
     """
     if switch_from_to_col is None:
-        switch_from_to_col = branch_pit[:, FROM_NODE_T_SWITCHED]
-    to_node_col = switch_from_to_col.astype(np.int32) * (FROM_NODE - TO_NODE) + TO_NODE
+        switch_from_to_col = branch_pit[:, IdxBranch.FROM_NODE_T_SWITCHED]
+    to_node_col = (switch_from_to_col.astype(np.int32) *
+                   (IdxBranch.FROM_NODE - IdxBranch.TO_NODE) + IdxBranch.TO_NODE)
     return branch_pit[np.arange(len(branch_pit)), to_node_col].astype(np.int32)

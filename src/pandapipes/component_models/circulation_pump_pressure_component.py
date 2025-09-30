@@ -6,7 +6,7 @@ from numpy import dtype
 
 from pandapipes.component_models.abstract_models.circulation_pump import CirculationPump
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import JAC_DERIV_DP, JAC_DERIV_DP1, PL
+from pandapipes.idx_branch import IdxBranch
 
 try:
     import pandaplan.core.pplog as logging
@@ -51,7 +51,7 @@ class CirculationPumpPressure(CirculationPump):
         :return: No Output.
         """
         circ_pump_pit = super().create_pit_branch_entries(net, branch_pit)
-        circ_pump_pit[:, PL] = net[cls.table_name()]['plift_bar'].values
+        circ_pump_pit[:, IdxBranch.PL] = net[cls.table_name()]['plift_bar'].values
         return circ_pump_pit
 
     @classmethod
@@ -59,5 +59,5 @@ class CirculationPumpPressure(CirculationPump):
         # set all pressure derivatives to 0 and velocity to 1; load vector must be 0, as no change
         # of velocity is allowed during the pipeflow iteration
         circ_pump_pit = super().adaption_after_derivatives_hydraulic(net, branch_pit, node_pit, idx_lookups, options)
-        circ_pump_pit[:, JAC_DERIV_DP] = 1
-        circ_pump_pit[:, JAC_DERIV_DP1] = -1
+        circ_pump_pit[:, IdxBranch.DF_DP_F_B] = 1
+        circ_pump_pit[:, IdxBranch.DF_DP_T_B] = -1
