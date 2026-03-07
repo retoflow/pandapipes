@@ -222,7 +222,7 @@ def derivatives_thermal_numba(node_pit, branch_pit,
                 dfb_dt[i] = np.exp(- alpha * length / (cp_b[i] * mdot))
                 dfb_dm[i] = (
                         (t_init_i[i] - t_amb) * np.exp(- alpha * length / (cp[i] * mdot))
-                        * (alpha * length / (cp[i] * mdot ** 2))
+                        * (alpha * length / (cp[i] * mdot ** 2)) + qext / (cp[i] * mdot ** 2)
                 )
             else:
                 fb[i] = amb - t_init_i1[i]

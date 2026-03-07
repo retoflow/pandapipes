@@ -120,6 +120,8 @@ class Pipe(BranchWInternalsComponent):
         to_nodes = junction_idx_lookup[net[cls.table_name()][tn_col].values]
         internal_pipe_number = cls.get_internal_branch_number(net)
         has_internals = np.any(internal_pipe_number > 1)
+        pipe_pit[:, TOUTINIT] = node_pit[to_nodes, TINIT_NODE]
+        pipe_pit[:, MDOTINIT] *= pipe_pit[:, AREA] * get_fluid(net).get_density(NORMAL_TEMPERATURE)
         if has_internals:
             internal_node_number = cls.get_internal_node_number(net)
             node_ft_lookups = get_lookup(net, "node", "from_to")
@@ -141,9 +143,8 @@ class Pipe(BranchWInternalsComponent):
             nan_mask = np.isnan(pipe_pit[:, TEXT])
             pipe_pit[nan_mask, TEXT] = get_net_option(net, 'ambient_temperature')
             pipe_pit[:, AREA] = pipe_pit[:, D] ** 2 * np.pi / 4
-
-        pipe_pit[:, TOUTINIT] = node_pit[to_nodes, TINIT_NODE]
-        pipe_pit[:, MDOTINIT] *= pipe_pit[:, AREA] * get_fluid(net).get_density(NORMAL_TEMPERATURE)
+        if get_net_option(net, "transient"):
+            pipe_pit[:, T_OUT_OLD] =  node_pit[to_nodes, TINIT_OLD]
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):

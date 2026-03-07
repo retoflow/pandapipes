@@ -10,8 +10,8 @@ from pandapipes.component_models import (get_fluid, BranchWOInternalsComponent, 
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.idx_branch import (MDOTINIT, QEXT, JAC_DERIV_DP1, JAC_DERIV_DM,
                                    JAC_DERIV_DP, LOAD_VEC_BRANCHES, TOUTINIT, JAC_DERIV_DT,
-                                   JAC_DERIV_DTOUT, LOAD_VEC_BRANCHES_T, FLOW_RETURN_CONNECT, JAC_DERIV_P_TO_T,
-                                   JAC_DERIV_P_FROM_T)
+                                   JAC_DERIV_DTOUT, LOAD_VEC_BRANCHES_T, FLOW_RETURN_CONNECT,
+                                   JAC_DERIV_M_DT, JAC_DERIV_M_DTOUT)
 from pandapipes.idx_node import TINIT
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_lookup
@@ -182,8 +182,8 @@ class HeatConsumer(BranchWOInternalsComponent):
             mask_ign = mask_equal | mask_zero
             hc_pit[mask & mask_ign, MDOTINIT] = 0
             hc_pit[mask & ~mask_ign, JAC_DERIV_DM] = df_dm[mask & ~mask_ign]
-            hc_pit[mask & ~mask_ign, JAC_DERIV_P_TO_T] = - hc_pit[mask & ~mask_ign, MDOTINIT] * cp[mask & ~mask_ign]
-            hc_pit[mask & ~mask_ign, JAC_DERIV_P_FROM_T] = hc_pit[mask & ~mask_ign, MDOTINIT] * cp[mask & ~mask_ign]
+            hc_pit[mask & ~mask_ign, JAC_DERIV_M_DT] = cp[mask & ~mask_ign] * hc_pit[mask, MDOTINIT]
+            hc_pit[mask & ~mask_ign, JAC_DERIV_M_DTOUT] = - cp[mask & ~mask_ign] * hc_pit[mask, MDOTINIT]
             hc_pit[mask, LOAD_VEC_BRANCHES] = - hc_pit[mask, QEXT] + df_dm[mask] * hc_pit[mask, MDOTINIT]
 
     @classmethod

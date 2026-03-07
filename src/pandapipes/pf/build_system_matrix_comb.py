@@ -11,7 +11,7 @@ from pandapipes.idx_branch import (FROM_NODE, TO_NODE, JAC_DERIV_DM, JAC_DERIV_D
                                    PC as PC_BRANCH, JAC_DERIV_DT_NODE, JAC_DERIV_DTOUT_NODE, LOAD_VEC_NODES_FROM_T,
                                    LOAD_VEC_NODES_TO_T, \
                                    LOAD_VEC_BRANCHES_T, BRANCH_TYPE, JAC_DERIV_DM_FROM_NODE, JAC_DERIV_DM_TO_NODE,
-                                   JAC_DERIV_T_DM, JAC_DERIV_P_FROM_T, JAC_DERIV_P_TO_T)
+                                   JAC_DERIV_T_DM, JAC_DERIV_M_DTOUT, JAC_DERIV_M_DT)
 
 from pandapipes.idx_node import (P, PC as PC_NODE, NODE_TYPE, T, NODE_TYPE_T, LOAD, LOAD_T, INFEED,
                                  MDOTSLACKINIT, JAC_DERIV_MSL, JAC_DERIV_DT_SLACK, JAC_DERIV_DT_LOAD)
@@ -101,9 +101,9 @@ def build_system_matrix_comb(net, branch_pit, node_pit):
     # branch_dF_dp_to
     system_data[2 * len_b:3 * len_b] = branch_pit[:, JAC_DERIV_DP1]
     # branch_dF_dt_from
-    system_data[3 * len_b:4 * len_b] = branch_pit[:, JAC_DERIV_P_FROM_T]
-    # branch_dF_dt_to
-    system_data[4 * len_b:5 * len_b] = branch_pit[:, JAC_DERIV_P_TO_T]
+    system_data[3 * len_b:4 * len_b] = branch_pit[:, JAC_DERIV_M_DT]
+    # branch_dF_dtout
+    system_data[4 * len_b:5 * len_b] = branch_pit[:, JAC_DERIV_M_DTOUT]
 
     # node equations
     # --------------
@@ -176,7 +176,7 @@ def build_system_matrix_comb(net, branch_pit, node_pit):
     # branch_dF_dt_from
     system_cols[3 * len_b:4 * len_b] = fn_therm  + len_hyd
     system_rows[3 * len_b:4 * len_b] = branch_matrix_indices_hyd
-    # branch_dF_dt_to
+    # branch_dF_dtout
     system_cols[4 * len_b:5 * len_b] = branch_matrix_indices_therm
     system_rows[4 * len_b:5 * len_b] = branch_matrix_indices_hyd
 

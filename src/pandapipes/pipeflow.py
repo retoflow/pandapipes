@@ -273,11 +273,11 @@ def solve_bidirectional_new(net):
         comp.adaption_after_derivatives_hydraulic(
             net, branch_pit, node_pit, branch_lookups, options)
 
-    branch_lookups = get_lookup(net, "branch", "from_to_active_heat_transfer")
-
     # Negative velocity values are turned to positive ones (including exchange of from_node and
     # to_node for temperature calculation
     branch_pit[:, FROM_NODE_T_SWITCHED] = branch_pit[:, MDOTINIT] < -2e-11
+
+    branch_lookups = get_lookup(net, "branch", "from_to_active_heat_transfer")
 
     for comp in net['component_list']:
         comp.adaption_before_derivatives_thermal(net, branch_pit, node_pit, branch_lookups, options)
@@ -285,23 +285,29 @@ def solve_bidirectional_new(net):
     for comp in net['component_list']:
         comp.adaption_after_derivatives_thermal(net, branch_pit, node_pit, branch_lookups, options)
 
-    if not check_infeed_number(node_pit):
-        m_init_old = branch_pit[:, MDOTINIT].copy()
-        p_init_old = node_pit[:, PINIT].copy()
-        slack_nodes = np.where(node_pit[:, NODE_TYPE] == P)[0]
-        msl_init_old = node_pit[slack_nodes, MDOTSLACKINIT].copy()
+    if not check_infeed_number(node_pit, branch_pit):
         t_init_old = node_pit[:, TINIT].copy()
         t_out_old = branch_pit[:, TOUTINIT].copy()
-        solve_hydraulics(net)
+        slack_nodes = np.where(node_pit[:, NODE_TYPE] == P)[0]
+
+        jacobian, epsilon = build_system_matrix(net, branch_pit, node_pit, False)
+
+        m_init_old = branch_pit[:, MDOTINIT].copy()
+        p_init_old = node_pit[:, PINIT].copy()
+        msl_init_old = node_pit[slack_nodes, MDOTSLACKINIT].copy()
+
+        # x is next step pressures and velocity
+        x = spsolve(jacobian, epsilon)
+
+        branch_pit[:, MDOTINIT] -= x[len(node_pit):len(node_pit) + len(branch_pit)] * options["alpha"]
+        node_pit[:, PINIT] -= x[:len(node_pit)] * options["alpha"]
+        node_pit[slack_nodes, MDOTSLACKINIT] -= x[len(node_pit) + len(branch_pit):]
         filtered = [None, None, slack_nodes, None, None]
-        return [branch_pit[:, MDOTINIT], m_init_old, node_pit[:, PINIT], p_init_old, msl_init_old,
-                node_pit[slack_nodes, MDOTSLACKINIT],
+        return [branch_pit[:, MDOTINIT], m_init_old, node_pit[:, PINIT], p_init_old,
+                node_pit[slack_nodes, MDOTSLACKINIT], msl_init_old,
                 t_out_old, t_out_old, t_init_old, t_init_old], np.array([np.nan]), filtered
 
-
     jacobian, epsilon = build_system_matrix_comb(net, branch_pit, node_pit)
-
-    x = spsolve(jacobian, epsilon)
 
     m_init_old = branch_pit[:, MDOTINIT].copy()
     p_init_old = node_pit[:, PINIT].copy()
@@ -309,6 +315,8 @@ def solve_bidirectional_new(net):
     msl_init_old = node_pit[slack_nodes, MDOTSLACKINIT].copy()
     t_init_old = node_pit[:, TINIT].copy()
     t_out_old = branch_pit[:, TOUTINIT].copy()
+    
+    x = spsolve(jacobian, epsilon)
 
     node_pit[:, PINIT] -= x[:len(node_pit)] * options["alpha"]
     branch_pit[:, MDOTINIT] -= x[len(node_pit):len(node_pit) + len(branch_pit)] * options["alpha"]
@@ -317,9 +325,8 @@ def solve_bidirectional_new(net):
     branch_pit[:, TOUTINIT] -= x[len(node_pit) * 2 + len(branch_pit) + len(slack_nodes):] * options["alpha"]
 
     filtered = [None, None, slack_nodes, None, None]
-    return [branch_pit[:, MDOTINIT], m_init_old, node_pit[:, PINIT], p_init_old, msl_init_old,
-                node_pit[slack_nodes, MDOTSLACKINIT],
-                branch_pit[:, TOUTINIT], t_out_old, node_pit[:, TINIT], t_init_old], epsilon, filtered
+    return [branch_pit[:, MDOTINIT], m_init_old, node_pit[:, PINIT], p_init_old, node_pit[slack_nodes, MDOTSLACKINIT],
+            msl_init_old, branch_pit[:, TOUTINIT], t_out_old, node_pit[:, TINIT], t_init_old], epsilon, filtered
 
 
 def solve_hydraulics(net):
@@ -472,7 +479,7 @@ def solve_temperature(net):
     t_init_old = node_pit[:, TINIT].copy()
     t_out_old = branch_pit[:, TOUTINIT].copy()
     filtered = [None, None]
-    if not check_infeed_number(node_pit):
+    if not check_infeed_number(node_pit, branch_pit):
         return [branch_pit[:, TOUTINIT], t_out_old, node_pit[:, TINIT], t_init_old], np.array([
             np.nan]), filtered
 

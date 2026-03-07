@@ -103,7 +103,7 @@ def derivatives_thermal_np(node_pit, branch_pit,
     fnt = cp_n * mdot * (t_init_i1 - t_init_nt)
     dfnt_dt = - cp_n * mdot
     dfnt_dtout = cp_n * mdot
-    dfbf_dm = t_init_i * cp_i
+    dfbf_dm = - t_init_i * cp_i
     dfbt_dm = t_init_i1 * cp_i1
 
     if transient:
@@ -196,6 +196,7 @@ def derivatives_thermal_np(node_pit, branch_pit,
             (t_init_i[branches_flow]  - t_amb[branches_flow])
              * np.exp(- alpha[branches_flow] * length[branches_flow] / (cp[branches_flow] * mdot[branches_flow]))
              * (alpha[branches_flow] * length[branches_flow] / (cp[branches_flow] * mdot[branches_flow] ** 2))
+            + qext[branches_flow] / (cp[branches_flow] * mdot[branches_flow] ** 2)
         )
 
         fn[~nodes_flow] = amb - t_init_n[~nodes_flow]

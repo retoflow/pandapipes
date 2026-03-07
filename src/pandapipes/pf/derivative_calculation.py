@@ -141,8 +141,8 @@ def calculate_derivatives_thermal(net,
     branch_pit[:, JAC_DERIV_DM_FROM_NODE] = dfbf_dm
     branch_pit[:, JAC_DERIV_DM_TO_NODE] = dfbt_dm
 
-    node_pit[:, INFEED] = False
-    node_pit[infeed, INFEED] = True
+    #node_pit[:, INFEED] = False
+    #node_pit[infeed, INFEED] = True
 
 
 def get_derived_values(node_pit, from_nodes, to_nodes, use_numba):
