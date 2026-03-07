@@ -5,7 +5,7 @@
 import numpy as np
 from numpy import dtype
 
-from pandapipes.component_models import (get_fluid, BranchWZeroLengthComponent, get_component_array,
+from pandapipes.component_models import (get_fluid, BranchWOInternalsComponent, get_component_array,
                                          standard_branch_wo_internals_result_lookup)
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.idx_branch import (MDOTINIT, QEXT, JAC_DERIV_DP1, JAC_DERIV_DM,
@@ -24,7 +24,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-class HeatConsumer(BranchWZeroLengthComponent):
+class HeatConsumer(BranchWOInternalsComponent):
     """
 
     """
@@ -121,7 +121,10 @@ class HeatConsumer(BranchWZeroLengthComponent):
         component_pits[cls.table_name()] = consumer_array
 
     @classmethod
-    def adaption_before_derivatives_hydraulic(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def adaption_before_derivatives_hydraulic(cls, net,
+                                              branch_pit, node_pit,
+                                              branch_pit_old, node_pit_old,
+                                              idx_lookups, options):
         f, t = idx_lookups[cls.table_name()]
         hc_pit = branch_pit[f:t, :]
         consumer_array = get_component_array(net, cls.table_name())
@@ -134,7 +137,10 @@ class HeatConsumer(BranchWZeroLengthComponent):
             hc_pit[mask, MDOTINIT] = mass
 
     @classmethod
-    def adaption_after_derivatives_hydraulic(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def adaption_after_derivatives_hydraulic(cls, net,
+                                             branch_pit, node_pit,
+                                             branch_pit_old, node_pit_old,
+                                             idx_lookups, options):
         """
         Perform adaptions to the branch pit after the derivatives have been calculated globally.
 
@@ -178,7 +184,10 @@ class HeatConsumer(BranchWZeroLengthComponent):
             hc_pit[mask, LOAD_VEC_BRANCHES] = - hc_pit[mask, QEXT] + df_dm[mask] * hc_pit[mask, MDOTINIT]
 
     @classmethod
-    def adaption_before_derivatives_thermal(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def adaption_before_derivatives_thermal(cls, net,
+                                            branch_pit, node_pit,
+                                            branch_pit_old, node_pit_old,
+                                            idx_lookups, options):
         f, t = idx_lookups[cls.table_name()]
         hc_pit = branch_pit[f:t, :]
         consumer_array = get_component_array(net, cls.table_name(), mode='heat_transfer')
@@ -198,7 +207,10 @@ class HeatConsumer(BranchWZeroLengthComponent):
             hc_pit[mask, QEXT] = q_ext
 
     @classmethod
-    def adaption_after_derivatives_thermal(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def adaption_after_derivatives_thermal(cls, net,
+                                           branch_pit, node_pit,
+                                           branch_pit_old, node_pit_old,
+                                           idx_lookups, options):
         f, t = idx_lookups[cls.table_name()]
         hc_pit = branch_pit[f:t, :]
         consumer_array = get_component_array(net, cls.table_name(), mode='heat_transfer')
@@ -238,11 +250,11 @@ class HeatConsumer(BranchWZeroLengthComponent):
         """
         if get_fluid(net).is_gas:
             output = ["p_from_bar", "p_to_bar", "t_from_k",
-                      "t_to_k", "t_outlet_k", "mdot_from_kg_per_s", "mdot_to_kg_per_s", "vdot_norm_m3_per_s", "reynolds", "lambda",
+                      "t_to_k", "t_outlet_k", "mdot_from_kg_per_s", "mdot_to_kg_per_s", "vdot_norm_m3_per_s",
                       "normfactor_from", "normfactor_to"]
         else:
             output = ["p_from_bar", "p_to_bar", "t_from_k", "t_to_k", "t_outlet_k", "mdot_from_kg_per_s",
-                      "mdot_to_kg_per_s", "vdot_m3_per_s", "reynolds", "lambda"]
+                      "mdot_to_kg_per_s", "vdot_m3_per_s"]
         output += ['deltat_k', 'qext_w']
         return output, True
 

@@ -1,6 +1,7 @@
-# Copyright (c) 2020-2024 by Fraunhofer Institute for Energy Economics
+# Copyright (c) 2020-2026 by Fraunhofer Institute for Energy Economics
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
+import copy
 
 import numpy as np
 import pandas as pd
@@ -13,7 +14,15 @@ from pandapipes.idx_node import (EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T,
                                  PINIT, NODE_TYPE, P, TINIT, NODE_TYPE_T, T, LOAD)
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
 from pandapipes.pf.internals_toolbox import _sum_by_group
+from pandas import Index
 
+
+def get_internal_lookup_structure(internals, table_name, internal_elements, start=0):
+    internals[table_name] = np.empty((len(internal_elements), 2), dtype=np.int32)
+    end = np.cumsum(internal_elements) - 1 + start
+    diff = internal_elements - 1
+    internals[table_name][:, 0] = end - diff
+    internals[table_name][:, 1] = end
 
 def p_correction_height_air(height):
     """
@@ -119,21 +128,18 @@ def add_new_component(net, component, overwrite=False):
             net['component_list'].append(component)
         net.update({name: comp_input})
         if isinstance(net[name], list):
-            net[name] = pd.DataFrame(np.zeros(0, dtype=net[name]), index=[])
+            net[name] = pd.DataFrame(np.zeros(0, dtype=net[name]), index=Index([], dtype=np.int64))
         # init_empty_results_table(net, name, component.get_result_table(net))
 
         if geodata is not None:
             net.update({name + '_geodata': geodata})
             if isinstance(net[name + '_geodata'], list):
                 net[name + '_geodata'] = pd.DataFrame(np.zeros(0, dtype=net[name + '_geodata']),
-                                                      index=[])
+                                                      index=Index([], dtype=np.int64))
 
 
 def set_entry_check_repeat(pit, column, entry, repeat_number, repeated=True):
-    if repeated:
-        pit[:, column] = np.repeat(entry, repeat_number)
-    else:
-        pit[:, column] = entry
+    pit[:, column] = np.repeat(entry, repeat_number) if repeated else entry
 
 
 def set_fixed_node_entries(net, node_pit, junctions, types, values, node_comp, mode):
@@ -225,3 +231,22 @@ def get_component_array(net, component_name, component_type="branch", mode='hydr
     f_all, t_all = get_lookup(net, component_type, "from_to")[component_name]
     in_service_elm = get_lookup(net, component_type, "active_%s"%mode)[f_all:t_all]
     return net["_pit"]["components"][component_name][in_service_elm]
+
+
+def get_std_type_lookup(net, table_name):
+    return np.array(list(net.std_types[table_name].keys()))
+
+
+def retrieve_u(params):
+    params = copy.deepcopy(params)
+    if not "u_w_per_m2k" in params:
+        params["u_w_per_m2k"] = np.nan
+    if not "u_w_per_mk" in params:
+        params["u_w_per_mk"] = np.nan
+    if not np.isnan(params["u_w_per_m2k"]) and not np.isnan(params["u_w_per_mk"]):
+        raise UserWarning(r'u_w_per_m2k and u_w_per_mk have been both defined. '
+                          r'This might lead to problems due to ambiguity! '
+                          r'Delete one value and update your standard type!')
+    elif not np.isnan(params["u_w_per_mk"]):
+        params["u_w_per_m2k"] = params["u_w_per_mk"] / (params["outer_diameter_mm"] * np.pi) * 1000.
+    return params
