@@ -142,6 +142,9 @@ def derivatives_thermal_numba(node_pit, branch_pit,
     fb = np.zeros_like(t_init_nt)
     dfb_dt = np.zeros_like(t_init_nt)
     dfb_dtout = np.zeros_like(t_init_nt)
+    dfbf_dm = np.zeros_like(cp_i)
+    dfbt_dm = np.zeros_like(cp_i)
+    dfb_dm = np.zeros_like(cp_i)
 
     infeed = np.zeros_like(t_init_n, dtype=bool)
 
@@ -168,6 +171,8 @@ def derivatives_thermal_numba(node_pit, branch_pit,
         fnt[i] = cp_n[i] * mdot * (t_init_i1[i] - t_init_nt[i])
         dfnt_dt[i] = - cp_n[i] * mdot
         dfnt_dtout[i] = cp_n[i] * mdot
+        dfbf_dm[i] = t_init_i[i] * cp_i[i]
+        dfbt_dm[i] = t_init_i1[i] * cp_i1[i]
 
         if transient:
             area = branch_pit[i][AREA]
@@ -181,11 +186,13 @@ def derivatives_thermal_numba(node_pit, branch_pit,
 
             dfb_dt[i] = - cp_b[i] * mdot
             dfb_dtout[i] = rho[i] * area * cp_b[i] / dt * length + cp_b[i] * mdot + alpha * length
+            dfb_dm[i] = cp[i] * (-t_init_i[i] + t_init_i1[i] - tl)
 
             if ~branches_flow[i] & (abs(branch_pit[i][LENGTH] < 1.e-8)):
                 fb[i] = rho[i] * area * cp_b[i] * (t_init_i1[i] - tvor) * (1 / dt) - alpha * (t_amb - t_init_i1[i]) + qext
                 dfb_dt[i] = 0
                 dfb_dtout[i] = rho[i] * area * cp_b[i] / dt + alpha
+                dfb_dm[i] = 0
 
             fn_zero = ~nodes_flow[from_nodes[i]]
             tn_zero = ~nodes_flow[to_nodes[i]]
@@ -196,6 +203,7 @@ def derivatives_thermal_numba(node_pit, branch_pit,
                 fn_deriv = rho[i] * area * cp_b[i] * (1 / dt) + alpha
                 dfn_dt[from_nodes[i]] -= fn_deriv
                 fn[from_nodes[i]] += fn_eq
+                dfbf_dm[i] = 0
             if tn_zero:
                 t_to_node_vor_zero = node_pit_old[to_nodes[i], node_pit_old_lookup[TINIT_NODE]]
                 t_to_node = node_pit[to_nodes[i], TINIT_NODE]
@@ -204,6 +212,7 @@ def derivatives_thermal_numba(node_pit, branch_pit,
                 tn_deriv = (rho[i]* area * cp_b[i] * (1 / dt) + alpha)
                 dfn_dt[to_nodes[i]] -= tn_deriv
                 fn[to_nodes[i]] += tn_eq
+                dfbt_dm[i] = 0
         else:
             if branches_flow[i]:
                 fb[i] = (
@@ -211,6 +220,10 @@ def derivatives_thermal_numba(node_pit, branch_pit,
                         - t_init_i1[i] + tl - qext / (cp_b[i] * mdot)
                 )
                 dfb_dt[i] = np.exp(- alpha * length / (cp_b[i] * mdot))
+                dfb_dm[i] = (
+                        (t_init_i[i] - t_amb) * np.exp(- alpha * length / (cp[i] * mdot))
+                        * (alpha * length / (cp[i] * mdot ** 2))
+                )
             else:
                 fb[i] = amb - t_init_i1[i]
             dfb_dtout[i] = -1
@@ -218,7 +231,7 @@ def derivatives_thermal_numba(node_pit, branch_pit,
             result_from = club_to[from_nodes[i]] if (from_nodes[i] < len(club_to)) else False
             infeed[from_nodes[i]] = ~result_from
 
-    return fn, dfn_dt, fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout, infeed
+    return fn, dfn_dt, fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout, dfbf_dm, dfbt_dm, dfb_dm, infeed
 
 
 @jit((float64[:], float64[:], float64[:], float64[:], float64[:]), nopython=True)

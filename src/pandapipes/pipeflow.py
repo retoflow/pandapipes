@@ -8,6 +8,7 @@ from scipy.sparse.linalg import spsolve
 from pandapipes.idx_branch import MDOTINIT, TOUTINIT, FROM_NODE_T_SWITCHED, ACTIVE as ACTIVE_BRANCH, BRANCH_TYPE
 from pandapipes.idx_node import PINIT, TINIT, MDOTSLACKINIT, NODE_TYPE, P, ACTIVE as ACTIVE_NODE
 from pandapipes.pf.build_system_matrix import build_system_matrix
+from pandapipes.pf.build_system_matrix_comb import build_system_matrix_comb
 from pandapipes.pf.derivative_calculation import (calculate_derivatives_hydraulic,
                                                   calculate_derivatives_thermal)
 from pandapipes.pf.pipeflow_setup import (
@@ -88,7 +89,7 @@ def pipeflow(net, sol_vec=None, **kwargs):
     if not (calculate_hydraulics | calculate_heat | calculate_bidrect):
         raise UserWarning("No proper calculation mode chosen.")
     elif calculate_bidrect:
-        bidirectional(net)
+        bidirectional_new(net)
     else:
         if calculate_hydraulics:
             hydraulics(net)
@@ -178,6 +179,26 @@ def bidirectional(net):
         raise PipeflowNotConverged("The bidrectional calculation did not converge to a solution.")
 
 
+def bidirectional_new(net):
+    net.converged = False
+    identify_active_nodes_branches(net, False)
+    reduce_pit(net, mode="hydraulics")
+    reduce_pit(net, mode="heat_transfer")
+    solver_vars = ['mdot', 'p', 'TOUT', 'T']
+    tol_m, tol_p, tol_temp = get_net_options(net, 'tol_m', 'tol_p', 'tol_T')
+    newton_raphson(
+        net, solve_bidirectional_new, 'bidirectional', solver_vars, [tol_m, tol_p, tol_temp, tol_temp],
+        ['branch', 'node', 'branch', 'node'], 'max_iter_bidirect'
+    )
+    if net.converged:
+        set_user_pf_options(net, hyd_flag=True)
+    else:
+        raise PipeflowNotConverged("The bidrectional calculation did not converge to a solution.")
+
+    extract_results_active_pit(net, mode="hydraulics")
+    extract_results_active_pit(net, mode="heat_transfer")
+
+
 def hydraulics(net):
     # Start of nonlinear loop
     # ---------------------------------------------------------------------------------------------
@@ -237,6 +258,68 @@ def solve_bidirectional(net):
     res = res_hyd + res_heat
     filtered = filter_hyd + filter_heat
     return res, residual, filtered
+
+def solve_bidirectional_new(net):
+    options = net["_options"]
+    branch_pit = net["_active_pit"]["branch"]
+    node_pit = net["_active_pit"]["node"]
+
+    branch_lookups = get_lookup(net, "branch", "from_to_active_hydraulics")
+    for comp in net['component_list']:
+        comp.adaption_before_derivatives_hydraulic(net, branch_pit, node_pit, branch_lookups,
+                                                   options)
+    calculate_derivatives_hydraulic(net, branch_pit, node_pit, options)
+    for comp in net['component_list']:
+        comp.adaption_after_derivatives_hydraulic(
+            net, branch_pit, node_pit, branch_lookups, options)
+
+    branch_lookups = get_lookup(net, "branch", "from_to_active_heat_transfer")
+
+    # Negative velocity values are turned to positive ones (including exchange of from_node and
+    # to_node for temperature calculation
+    branch_pit[:, FROM_NODE_T_SWITCHED] = branch_pit[:, MDOTINIT] < -2e-11
+
+    for comp in net['component_list']:
+        comp.adaption_before_derivatives_thermal(net, branch_pit, node_pit, branch_lookups, options)
+    calculate_derivatives_thermal(net, branch_pit, node_pit, options)
+    for comp in net['component_list']:
+        comp.adaption_after_derivatives_thermal(net, branch_pit, node_pit, branch_lookups, options)
+
+    if not check_infeed_number(node_pit):
+        m_init_old = branch_pit[:, MDOTINIT].copy()
+        p_init_old = node_pit[:, PINIT].copy()
+        slack_nodes = np.where(node_pit[:, NODE_TYPE] == P)[0]
+        msl_init_old = node_pit[slack_nodes, MDOTSLACKINIT].copy()
+        t_init_old = node_pit[:, TINIT].copy()
+        t_out_old = branch_pit[:, TOUTINIT].copy()
+        solve_hydraulics(net)
+        filtered = [None, None, slack_nodes, None, None]
+        return [branch_pit[:, MDOTINIT], m_init_old, node_pit[:, PINIT], p_init_old, msl_init_old,
+                node_pit[slack_nodes, MDOTSLACKINIT],
+                t_out_old, t_out_old, t_init_old, t_init_old], np.array([np.nan]), filtered
+
+
+    jacobian, epsilon = build_system_matrix_comb(net, branch_pit, node_pit)
+
+    x = spsolve(jacobian, epsilon)
+
+    m_init_old = branch_pit[:, MDOTINIT].copy()
+    p_init_old = node_pit[:, PINIT].copy()
+    slack_nodes = np.where(node_pit[:, NODE_TYPE] == P)[0]
+    msl_init_old = node_pit[slack_nodes, MDOTSLACKINIT].copy()
+    t_init_old = node_pit[:, TINIT].copy()
+    t_out_old = branch_pit[:, TOUTINIT].copy()
+
+    node_pit[:, PINIT] -= x[:len(node_pit)] * options["alpha"]
+    branch_pit[:, MDOTINIT] -= x[len(node_pit):len(node_pit) + len(branch_pit)] * options["alpha"]
+    node_pit[slack_nodes, MDOTSLACKINIT] -= x[len(node_pit) + len(branch_pit):len(node_pit) + len(branch_pit) + len(slack_nodes)]
+    node_pit[:, TINIT] -= x[len(node_pit) + len(branch_pit) + len(slack_nodes):len(node_pit) * 2 + len(branch_pit) + len(slack_nodes)] * options["alpha"]
+    branch_pit[:, TOUTINIT] -= x[len(node_pit) * 2 + len(branch_pit) + len(slack_nodes):] * options["alpha"]
+
+    filtered = [None, None, slack_nodes, None, None]
+    return [branch_pit[:, MDOTINIT], m_init_old, node_pit[:, PINIT], p_init_old, msl_init_old,
+                node_pit[slack_nodes, MDOTSLACKINIT],
+                branch_pit[:, TOUTINIT], t_out_old, node_pit[:, TINIT], t_init_old], epsilon, filtered
 
 
 def solve_hydraulics(net):

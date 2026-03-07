@@ -4,7 +4,7 @@ from pandapipes.idx_branch import (LENGTH, D, K, RE, LAMBDA, LOAD_VEC_BRANCHES, 
                                    JAC_DERIV_DP1, JAC_DERIV_DM_NODE, FROM_NODE, TO_NODE, TOUTINIT, AREA,
                                    LOAD_VEC_BRANCHES_T, JAC_DERIV_DT, LOAD_VEC_NODES_TO_T,
                                    LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO, JAC_DERIV_DT_NODE, JAC_DERIV_DTOUT_NODE,
-                                   JAC_DERIV_DTOUT, MDOTINIT)
+                                   JAC_DERIV_DTOUT, JAC_DERIV_DM_TO_NODE, JAC_DERIV_T_DM, JAC_DERIV_DM_FROM_NODE, MDOTINIT)
 from pandapipes.idx_node import TINIT as TINIT_NODE, INFEED, LOAD_T, JAC_DERIV_DT_N
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
@@ -117,7 +117,7 @@ def calculate_derivatives_thermal(net,
     rho = get_branch_real_density(fluid, node_pit, branch_pit)
     amb = get_net_option(net, 'ambient_temperature')
 
-    fn, dfn_dt, fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout, infeed = (
+    fn, dfn_dt, fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout, dfbf_dm, dfbt_dm, dfb_dm, dfbf_dm, dfbt_dm, dfb_dm, infeed = (
         derivatives_termal(node_pit, branch_pit,
                            node_pit_old, node_pit_old_lookup,
                            branch_pit_old, branch_pit_old_lookup,
@@ -132,10 +132,14 @@ def calculate_derivatives_thermal(net,
     branch_pit[:, LOAD_VEC_BRANCHES_T] = fb
     branch_pit[:, JAC_DERIV_DT] = dfb_dt
     branch_pit[:, JAC_DERIV_DTOUT] = dfb_dtout
+    branch_pit[:, JAC_DERIV_T_DM] = dfb_dm
 
     branch_pit[:, LOAD_VEC_NODES_TO_T] = fnt
     branch_pit[:, JAC_DERIV_DT_NODE] = dfnt_dt
     branch_pit[:, JAC_DERIV_DTOUT_NODE] = dfnt_dtout
+    branch_pit[:, JAC_DERIV_DTOUT_NODE] = dfbt_dtout
+    branch_pit[:, JAC_DERIV_DM_FROM_NODE] = dfbf_dm
+    branch_pit[:, JAC_DERIV_DM_TO_NODE] = dfbt_dm
 
     node_pit[:, INFEED] = False
     node_pit[infeed, INFEED] = True

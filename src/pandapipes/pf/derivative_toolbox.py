@@ -103,6 +103,8 @@ def derivatives_thermal_np(node_pit, branch_pit,
     fnt = cp_n * mdot * (t_init_i1 - t_init_nt)
     dfnt_dt = - cp_n * mdot
     dfnt_dtout = cp_n * mdot
+    dfbf_dm = t_init_i * cp_i
+    dfbt_dm = t_init_i1 * cp_i1
 
     if transient:
         area = branch_pit[:, AREA]
@@ -116,6 +118,7 @@ def derivatives_thermal_np(node_pit, branch_pit,
 
         dfb_dt = - cp_b * mdot
         dfb_dtout = rho * area * cp_b / dt * length + cp_b * mdot + alpha * length
+        dfb_dm = cp * (-t_init_i + t_init_i1 - tl)
 
         if np.any(~branches_flow):
             # TODO: maybe replace this statement with a component lookup
@@ -129,6 +132,7 @@ def derivatives_thermal_np(node_pit, branch_pit,
                 dfb_dt[mask] = 0
                 dfb_dtout[mask] = (rho[mask] * area[mask] * cp_b[mask] / dt +
                                                      alpha[mask])
+                dfb_dm[mask] = 0
 
         if np.any(~nodes_flow):
             fn_zero = ~nodes_flow[from_nodes]
@@ -163,6 +167,8 @@ def derivatives_thermal_np(node_pit, branch_pit,
             dfn_dt[~nodes_flow] = 0
             dfn_dt[fn_nodes] -= fn_deriv_sum
             dfn_dt[tn_nodes] -= tn_deriv_sum
+            dfbf_dm[fn_zero] = 0
+            dfbt_dm[tn_zero] = 0
     else:
         non_zero_length_mask = ~np.isclose(branch_pit[:, LENGTH], 0, rtol=1e-6, atol=1e-10)
         if np.any(non_zero_length_mask & (np.abs(branch_pit[:, QEXT]) > 1e-12)):
@@ -182,9 +188,15 @@ def derivatives_thermal_np(node_pit, branch_pit,
         )
         fb[~branches_flow] = amb - t_init_i1[~branches_flow]
         dfb_dt = np.zeros_like(cp_b)
+        dfb_dm = np.zeros_like(cp)
         dfb_dt[branches_flow] = np.exp(- alpha[branches_flow] * length[branches_flow] /
                                        (cp_b[branches_flow] * mdot[branches_flow]))
         dfb_dtout = - np.ones_like(cp_b)
+        dfb_dm[branches_flow] = (
+            (t_init_i[branches_flow]  - t_amb[branches_flow])
+             * np.exp(- alpha[branches_flow] * length[branches_flow] / (cp[branches_flow] * mdot[branches_flow]))
+             * (alpha[branches_flow] * length[branches_flow] / (cp[branches_flow] * mdot[branches_flow] ** 2))
+        )
 
         fn[~nodes_flow] = amb - t_init_n[~nodes_flow]
         dfn_dt[~nodes_flow] = np.ones(np.sum(~nodes_flow))
@@ -194,7 +206,7 @@ def derivatives_thermal_np(node_pit, branch_pit,
 
     infeed = np.setdiff1d(from_nodes[branches_flow], to_nodes[branches_flow])
 
-    return fn, dfn_dt, fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout, infeed
+    return fn, dfn_dt, fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout, dfbf_dm, dfbt_dm, dfb_dm, infeed
 
 
 def calc_lambda_nikuradse_incomp_np(m, d, k, eta, area):
