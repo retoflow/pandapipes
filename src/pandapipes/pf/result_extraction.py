@@ -81,16 +81,18 @@ def get_branch_results_gas(net, branch_pit, node_pit, from_nodes, to_nodes, v_mp
                        / (p_abs_from[mask] ** 2 - p_abs_to[mask] ** 2)
 
     fluid = get_fluid(net)
+    switched_t = branch_pit[:, IdxBranch.FROM_NODE_T_SWITCHED].astype(np.bool_)
     t_from = node_pit[from_nodes, IdxNode.TINIT]
+    t_from[switched_t] = node_pit[to_nodes[switched_t], IdxNode.TINIT]
     t_to = branch_pit[:, IdxBranch.TOUTINIT]
     tm = (t_from + t_to) / 2
     numerator_from = NORMAL_PRESSURE * t_from / NORMAL_TEMPERATURE
     numerator_to = NORMAL_PRESSURE * t_to / NORMAL_TEMPERATURE
     numerator = NORMAL_PRESSURE * tm / NORMAL_TEMPERATURE
 
-    normfactor_from = numerator_from * fluid.get_property("compressibility", p_abs_from) / p_abs_from
-    normfactor_to = numerator_to * fluid.get_property("compressibility", p_abs_to) / p_abs_to
-    normfactor_mean = numerator * fluid.get_property("compressibility", p_abs_mean) / p_abs_mean
+    normfactor_from = numerator_from * fluid.get_compressibility(p_abs_from, t_from) / p_abs_from
+    normfactor_to = numerator_to * fluid.get_compressibility(p_abs_to, t_to) / p_abs_to
+    normfactor_mean = numerator * fluid.get_compressibility(p_abs_mean, tm) / p_abs_mean
 
     v_gas_from = v_mps * normfactor_from
     v_gas_to = v_mps * normfactor_to
@@ -106,9 +108,18 @@ def get_branch_results_gas_numba(net, branch_pit, node_pit, from_nodes, to_nodes
                                                            p_from, p_to)
 
     fluid = get_fluid(net)
-    comp_from = fluid.get_property("compressibility", p_abs_from)
-    comp_to = fluid.get_property("compressibility", p_abs_to)
-    comp_mean = fluid.get_property("compressibility", p_abs_mean)
+    args_from, args_to, args_mean = [p_abs_from], [p_abs_to], [p_abs_mean]
+    if hasattr(fluid.all_properties["compressibility"], "allow_2d"):
+        switched_t = branch_pit[:, FROM_NODE_T_SWITCHED].astype(np.bool_)
+        t_from = node_pit[from_nodes, TINIT_NODE]
+        t_from[switched_t] = node_pit[to_nodes[switched_t], TINIT_NODE]
+        t_to = branch_pit[:, TOUTINIT]
+        args_from.append(t_from)
+        args_to.append(t_to)
+        args_mean.append((t_from + t_to) / 2)
+    comp_from = fluid.get_compressibility(*args_from)
+    comp_to = fluid.get_compressibility(*args_to)
+    comp_mean = fluid.get_compressibility(*args_mean)
 
     v_gas_from, v_gas_to, v_gas_mean, normfactor_from, normfactor_to, normfactor_mean = \
         get_gas_vel_numba(node_pit, branch_pit, comp_from, comp_to, comp_mean, p_abs_from, p_abs_to,

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025 by Fraunhofer Institute for Energy Economics
+# Copyright (c) 2020-2026 by Fraunhofer Institute for Energy Economics
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
@@ -69,18 +69,15 @@ def build_system_matrix(net, branch_pit, node_pit, heat_mode):
         full_len = len_tsb + slack_nodes.shape[0]
     else:
         len_sl = 0
-        not_slack_fn_branch_mask = ~node_pit[fn, INFEED].astype(np.bool_)
         not_slack_tn_branch_mask = ~node_pit[tn, INFEED].astype(np.bool_)
         not_slack_mask = ~node_pit[:, INFEED].astype(np.bool_)
-        len_fn_not_slack = np.sum(not_slack_fn_branch_mask)
         len_tn_not_slack = np.sum(not_slack_tn_branch_mask)
         len_not_slack = np.sum(not_slack_mask)
         infeed_node = np.arange(len_n)[node_pit[:, INFEED].astype(np.bool_)]
-        len_fn1 = num_der * len_b + len_fn_not_slack
-        len_tload = len_fn1 + len_not_slack
-        len_tslack = len_tload + len_not_slack
-        len_tout= len_tslack + len_tn_not_slack
-        full_len = len_tout + slack_nodes.shape[0]
+        len_tn = num_der * len_b + len_tn_not_slack
+        len_tout = len_tn + len_tn_not_slack
+        len_nt = len_tout + len_not_slack
+        full_len = len_nt + slack_nodes.shape[0]
 
     system_data = np.zeros(full_len, dtype=np.float64)
 
@@ -127,19 +124,16 @@ def build_system_matrix(net, branch_pit, node_pit, heat_mode):
 
         # node equations
         # --------------
-        # node_dF_dT_from
-        system_data[2 * len_b:len_fn1] = branch_pit[not_slack_fn_branch_mask, JAC_DERIV_DT_NODE]
-        # node_dFload_dT
-        system_data[len_fn1:len_tload] = node_pit[not_slack_mask, JAC_DERIV_DT_LOAD]
-        # node_dFslack_dT
-        system_data[len_tload:len_tslack] = node_pit[not_slack_mask, JAC_DERIV_DT_SLACK]
+        # node_dF_dT_to
+        system_data[2 * len_b:len_tn] = branch_pit[not_slack_tn_branch_mask, JAC_DERIV_DT_NODE]
         # node_dF_dT_out
-        system_data[len_tslack:len_tout] = branch_pit[not_slack_tn_branch_mask, JAC_DERIV_DTOUT_NODE]
-
+        system_data[len_tn:len_tout] = branch_pit[not_slack_tn_branch_mask, JAC_DERIV_DTOUT_NODE]
+        # node_dF_dT
+        system_data[len_tout:len_nt] = node_pit[not_slack_mask, JAC_DERIV_DT_N]
         # fixed temperature equations
         # ---------------------------
         # t_nodes
-        system_data[len_tout:] = 1
+        system_data[len_nt:] = 1
 
     # position in the matrix
     if not update_only:
@@ -202,24 +196,21 @@ def build_system_matrix(net, branch_pit, node_pit, heat_mode):
 
             # node equations
             # --------------
-            # node_dF_dT_from
-            system_cols[2 * len_b:len_fn1] = fn[not_slack_fn_branch_mask]
-            system_rows[2 * len_b:len_fn1] = fn[not_slack_fn_branch_mask]
-            # node_dFload_dT
-            system_cols[len_fn1:len_tload] = np.arange(len_n)[not_slack_mask]
-            system_rows[len_fn1:len_tload] = np.arange(len_n)[not_slack_mask]
-            # node_dFslack_dT
-            system_cols[len_tload:len_tslack] = np.arange(len_n)[not_slack_mask]
-            system_rows[len_tload:len_tslack] = np.arange(len_n)[not_slack_mask]
+            # node_dF_dT_to
+            system_cols[2 * len_b:len_tn] = tn[not_slack_tn_branch_mask]
+            system_rows[2 * len_b:len_tn] = tn[not_slack_tn_branch_mask]
             # node_dF_dT_out
-            system_cols[len_tslack:len_tout] = branch_matrix_indices[not_slack_tn_branch_mask]
-            system_rows[len_tslack:len_tout] = tn[not_slack_tn_branch_mask]
+            system_cols[len_tn:len_tout] = branch_matrix_indices[not_slack_tn_branch_mask]
+            system_rows[len_tn:len_tout] = tn[not_slack_tn_branch_mask]
+            # node_dF_dT
+            system_cols[len_tout:len_nt] = np.arange(len_n)[not_slack_mask]
+            system_rows[len_tout:len_nt] = np.arange(len_n)[not_slack_mask]
 
             # fixed temperature equations
             # ---------------------------
             # t_nodes (overwrites only infeeding nodes' equation)
-            system_cols[len_tout:] = slack_nodes
-            system_rows[len_tout:] = infeed_node
+            system_cols[len_nt:] = slack_nodes
+            system_rows[len_nt:] = infeed_node
 
         if not update_option:
             system_matrix = csr_matrix((system_data, (system_rows, system_cols)),
@@ -269,9 +260,7 @@ def build_system_matrix(net, branch_pit, node_pit, heat_mode):
         load_vector = np.zeros(len_n + len_b)
         load_vector[len_n:] = branch_pit[:, LOAD_VEC_BRANCHES_T]
         load_vector[:len_n] = node_pit[:, LOAD_T] * (-1)
-        fn_unique, fn_sums = _sum_by_group(use_numba, fn, branch_pit[:, LOAD_VEC_NODES_FROM_T])
         tn_unique, tn_sums = _sum_by_group(use_numba, tn, branch_pit[:, LOAD_VEC_NODES_TO_T])
-        load_vector[fn_unique] -= fn_sums
         load_vector[tn_unique] += tn_sums
         load_vector[infeed_node] = 0
 

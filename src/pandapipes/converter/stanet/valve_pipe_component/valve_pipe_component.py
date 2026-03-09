@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025 by Fraunhofer Institute for Energy Economics
+# Copyright (c) 2020-2026 by Fraunhofer Institute for Energy Economics
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
@@ -46,11 +46,12 @@ class ValvePipe(Pipe):
         :rtype:
         """
         comp_pit[:, IdxBranch.LENGTH] = np.repeat(net[cls.table_name].length_km.values * 1000 /
-                                                  internal_pipe_number, internal_pipe_number)
-        comp_pit[:, IdxBranch.K] = np.repeat(net[cls.table_name].k_mm.values / 1000, internal_pipe_number)
-        comp_pit[:, IdxBranch.D] = np.repeat(net[cls.table_name].diameter_m.values, internal_pipe_number)
+                                        internal_pipe_number, internal_pipe_number)
+        comp_pit[:, IdxBranch.K] = np.repeat(net[cls.table_name].k_mm.values / 1000,
+                                   internal_pipe_number)
+        comp_pit[:, IdxBranch.D] = np.repeat(net[cls.table_name].inner_diameter_mm.values / 1000., internal_pipe_number)
         comp_pit[:, IdxBranch.AREA] = comp_pit[:, IdxBranch.D] ** 2 * np.pi / 4
-        comp_pit[:, IdxBranch.LOSS_COEFFICIENT] = np.repeat(net[cls.table_name].loss_coefficient.values,
+        comp_pit[:, IdxBranch.LC] = np.repeat(net[cls.table_name].loss_coefficient.values,
                                     internal_pipe_number)
 
     @classmethod

@@ -119,7 +119,10 @@ class HeatConsumer(BranchWOInternalsComponent):
         component_pits[cls.table_name()] = consumer_array
 
     @classmethod
-    def adaption_before_derivatives_hydraulic(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def adaption_before_derivatives_hydraulic(cls, net,
+                                              branch_pit, node_pit,
+                                              branch_pit_old, node_pit_old,
+                                              idx_lookups, options):
         f, t = idx_lookups[cls.table_name()]
         hc_pit = branch_pit[f:t, :]
         consumer_array = get_component_array(net, cls.table_name())
@@ -132,7 +135,10 @@ class HeatConsumer(BranchWOInternalsComponent):
             hc_pit[mask, IdxBranch.MDOTINIT] = mass
 
     @classmethod
-    def adaption_after_derivatives_hydraulic(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def adaption_after_derivatives_hydraulic(cls, net,
+                                             branch_pit, node_pit,
+                                             branch_pit_old, node_pit_old,
+                                             idx_lookups, options):
         """
         Perform adaptions to the branch pit after the derivatives have been calculated globally.
 
@@ -176,7 +182,10 @@ class HeatConsumer(BranchWOInternalsComponent):
             hc_pit[mask, IdxBranch.F_B] = - hc_pit[mask, IdxBranch.QEXT] + df_dm[mask] * hc_pit[mask, IdxBranch.MDOTINIT]
 
     @classmethod
-    def adaption_before_derivatives_thermal(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def adaption_before_derivatives_thermal(cls, net,
+                                            branch_pit, node_pit,
+                                            branch_pit_old, node_pit_old,
+                                            idx_lookups, options):
         f, t = idx_lookups[cls.table_name()]
         hc_pit = branch_pit[f:t, :]
         consumer_array = get_component_array(net, cls.table_name(), mode='heat_transfer')
@@ -196,7 +205,10 @@ class HeatConsumer(BranchWOInternalsComponent):
             hc_pit[mask, IdxBranch.QEXT] = q_ext
 
     @classmethod
-    def adaption_after_derivatives_thermal(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def adaption_after_derivatives_thermal(cls, net,
+                                           branch_pit, node_pit,
+                                           branch_pit_old, node_pit_old,
+                                           idx_lookups, options):
         f, t = idx_lookups[cls.table_name()]
         hc_pit = branch_pit[f:t, :]
         consumer_array = get_component_array(net, cls.table_name(), mode='heat_transfer')

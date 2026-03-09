@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025 by Fraunhofer Institute for Energy Economics
+# Copyright (c) 2020-2026 by Fraunhofer Institute for Energy Economics
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
@@ -99,12 +99,11 @@ class BranchWOInternalsComponent(BranchComponent):
             branch_wo_internals_pit[:, IdxBranch.ACTIVE] = net[cls.table_name()][cls.active_identifier()].values
             branch_wo_internals_pit[:, IdxBranch.LENGTH] = 0
             branch_wo_internals_pit[:, IdxBranch.K] = 1000
-            branch_wo_internals_pit[:, IdxBranch.TEXT] = 293.15
+            branch_wo_internals_pit[:, IdxBranch.TEXT] = get_net_option(net, 'ambient_temperature')
             branch_wo_internals_pit[:, IdxBranch.ALPHA] = 0
             branch_wo_internals_pit[:, IdxBranch.D] = 0.1
             branch_wo_internals_pit[:, IdxBranch.AREA] = branch_wo_internals_pit[:, IdxBranch.D] ** 2 * np.pi / 4
-        if get_net_option(net, "transient"):
-            branch_wo_internals_pit[:, IdxBranch.T_OUT_OLD] = branch_wo_internals_pit[:, IdxBranch.TOUTINIT]
+            branch_wo_internals_pit[:, IdxBranch.DO] = branch_wo_internals_pit[:, IdxBranch.D]
         return branch_wo_internals_pit
 
     @classmethod

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025 by Fraunhofer Institute for Energy Economics
+# Copyright (c) 2020-2026 by Fraunhofer Institute for Energy Economics
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
@@ -11,7 +11,7 @@ class IdxNode(metaclass=IndexMeta):
     T = 3  # Reference node with fixed temperature, otherwise 0
     PC = 4  # Controlled node with fixed pressure p
     GE = 5
-    
+
     # node indices
     TABLE_IDX = 0  # number of the table that this node belongs to
     ELEMENT_IDX = 1  # index of the element that this node belongs to (within the given table)
@@ -26,25 +26,23 @@ class IdxNode(metaclass=IndexMeta):
     EXT_GRID_OCCURENCE_T = 10
     INFEED = 11
     VAR_MASS_SLACK = 12 #required as slack do not necesseraly allow mass different from zero
-    
+
     PINIT = 13
     MDOTSLACKINIT = 14
     TINIT = 15
-    
-    DF1_DP_N = 15
-    DF2_DP_N = 16
-    DF1_DMSLACK_N = 16
-    DF2_DMSLACK_N = 16
-    
-    P_COL = 12
-    MSLACK_COL = 15
-    
-    ROW1_N = 15
-    ROW2_N = 16
-    
-    JAC_DERIV_DT_SLACK = 17
-    JAC_DERIV_DT_LOAD = 18
-    
-    TINIT_OLD = 19
-    
-    node_cols = 20
+
+    DF1_DP_N = 16
+    DF2_DP_N = 17
+    DF1_DMSLACK_N = 18
+    DF2_DMSLACK_N = 19
+
+    P_COL = 20
+    MSLACK_COL = 21
+
+    ROW1_N = 22
+    ROW2_N = 23
+
+    JAC_DERIV_MSL = 24
+    JAC_DERIV_DT_N = 25
+
+    node_cols = 26

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025 by Fraunhofer Institute for Energy Economics
+# Copyright (c) 2020-2026 by Fraunhofer Institute for Energy Economics
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
@@ -76,31 +76,27 @@ class Pipe(BranchWInternalsComponent):
     def create_pit_node_entries(cls, net, node_pit):
         int_node_pit = super().create_pit_node_entries(net, node_pit)
         if int_node_pit is not None:
+            int_node_number = cls.get_internal_node_number(net)
+            ft_lookup = get_lookup(net, "node", "from_to")
+            junction_table_name = cls.get_connected_node_type().table_name()
+            fj_name, tj_name = cls.from_to_node_cols()
+            f_junction, t_junction = ft_lookup[junction_table_name]
+            junction_pit = node_pit[f_junction:t_junction, :]
+            from_junctions = net[cls.table_name()][fj_name].values.astype(np.int32)
+            to_junctions = net[cls.table_name()][tj_name].values.astype(np.int32)
+            junction_indices = get_lookup(net, "node", "index")[junction_table_name]
+            fj_nodes = junction_indices[from_junctions]
+            tj_nodes = junction_indices[to_junctions]
+            int_node_pit[:, IdxNode.TINIT] = vinterp(junction_pit[fj_nodes, IdxNode.TINIT],
+                                                  junction_pit[tj_nodes, IdxNode.TINIT], int_node_number)
+            int_node_pit[:, IdxNode.PINIT] = vinterp(junction_pit[fj_nodes, IdxNode.PINIT], junction_pit[tj_nodes, IdxNode.PINIT],
+                                             int_node_number)
             if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
-                int_node_number = cls.get_internal_node_number(net)
-                ft_lookup = get_lookup(net, "node", "from_to")
-                junction_table_name = cls.get_connected_node_type().table_name()
-                fj_name, tj_name = cls.from_to_node_cols()
-                f_junction, t_junction = ft_lookup[junction_table_name]
-                junction_pit = node_pit[f_junction:t_junction, :]
-                from_junctions = net[cls.table_name()][fj_name].values.astype(np.int32)
-                to_junctions = net[cls.table_name()][tj_name].values.astype(np.int32)
-                junction_indices = get_lookup(net, "node", "index")[junction_table_name]
-                fj_nodes = junction_indices[from_junctions]
-                tj_nodes = junction_indices[to_junctions]
-
-
-                int_node_pit[:, IdxNode.TINIT] = vinterp(junction_pit[fj_nodes, IdxNode.TINIT],
-                                                      junction_pit[tj_nodes, IdxNode.TINIT], int_node_number)
                 int_node_pit[:, IdxNode.HEIGHT] = vinterp(junction_pit[fj_nodes, IdxNode.HEIGHT], junction_pit[tj_nodes, IdxNode.HEIGHT],
                                                   int_node_number)
-                int_node_pit[:, IdxNode.PINIT] = vinterp(junction_pit[fj_nodes, IdxNode.PINIT], junction_pit[tj_nodes, IdxNode.PINIT],
-                                                 int_node_number)
                 int_node_pit[:, IdxNode.PAMB] = p_correction_height_air(int_node_pit[:, IdxNode.HEIGHT])
                 int_node_pit[:, IdxNode.ACTIVE] = np.repeat(net[cls.table_name()][cls.active_identifier()].values,
                                                        int_node_number)
-            if get_net_option(net, "transient"):
-                int_node_pit[:, IdxNode.TINIT_OLD] = int_node_pit[:, IdxNode.TINIT].astype(np.float64)
 
 
     @classmethod
@@ -116,41 +112,38 @@ class Pipe(BranchWInternalsComponent):
         """
 
         pipe_pit, node_pit = super().create_pit_branch_entries(net, branch_pit)
+        junction_idx_lookup = get_lookup(net, "node", "index")[
+            cls.get_connected_node_type().table_name()]
+        fn_col, tn_col = cls.from_to_node_cols()
+
+        from_nodes = junction_idx_lookup[net[cls.table_name()][fn_col].values]
+        to_nodes = junction_idx_lookup[net[cls.table_name()][tn_col].values]
+        internal_pipe_number = cls.get_internal_branch_number(net)
+        has_internals = np.any(internal_pipe_number > 1)
+        if has_internals:
+            internal_node_number = cls.get_internal_node_number(net)
+            node_ft_lookups = get_lookup(net, "node", "from_to")
+            pipe_nodes_from, pipe_nodes_to = node_ft_lookups[cls.internal_node_name()]
+            pipe_nodes_idx = np.arange(pipe_nodes_from, pipe_nodes_to)
+            insert_places = np.repeat(np.arange(len(from_nodes)), internal_node_number)
+            from_nodes = np.insert(from_nodes, insert_places + 1, pipe_nodes_idx)
+            to_nodes = np.insert(to_nodes, insert_places, pipe_nodes_idx)
         if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
-            junction_idx_lookup = get_lookup(net, "node", "index")[
-                cls.get_connected_node_type().table_name()]
-            fn_col, tn_col = cls.from_to_node_cols()
-
-            from_nodes = junction_idx_lookup[net[cls.table_name()][fn_col].values]
-            to_nodes = junction_idx_lookup[net[cls.table_name()][tn_col].values]
-            internal_pipe_number = cls.get_internal_branch_number(net)
-            has_internals = np.any(internal_pipe_number > 1)
-            if has_internals:
-                internal_node_number = cls.get_internal_node_number(net)
-                node_ft_lookups = get_lookup(net, "node", "from_to")
-                pipe_nodes_from, pipe_nodes_to = node_ft_lookups[cls.internal_node_name()]
-                pipe_nodes_idx = np.arange(pipe_nodes_from, pipe_nodes_to)
-                insert_places = np.repeat(np.arange(len(from_nodes)), internal_node_number)
-                from_nodes = np.insert(from_nodes, insert_places + 1, pipe_nodes_idx)
-                to_nodes = np.insert(to_nodes, insert_places, pipe_nodes_idx)
-
             pipe_pit[:, IdxBranch.FROM_NODE] = from_nodes
             pipe_pit[:, IdxBranch.TO_NODE] = to_nodes
-            pipe_pit[:, IdxBranch.TOUTINIT] = node_pit[to_nodes, IdxNode.TINIT]
 
             tbl = cls.table_name()
             set_entry_check_repeat(pipe_pit, IdxBranch.LENGTH, net[tbl].length_km.values * 1000 / internal_pipe_number,
                 internal_pipe_number, has_internals)
             set_entry_check_repeat(pipe_pit, IdxBranch.K, net[tbl].k_mm.values / 1000, internal_pipe_number, has_internals)
             set_entry_check_repeat(pipe_pit, IdxBranch.ALPHA, net[tbl].u_w_per_m2k.values, internal_pipe_number, has_internals)
-            set_entry_check_repeat(pipe_pit, IdxBranch.QEXT, net[tbl].qext_w.values, internal_pipe_number, has_internals)
             set_entry_check_repeat(pipe_pit, IdxBranch.TEXT, net[tbl].text_k.values, internal_pipe_number, has_internals)
             nan_mask = np.isnan(pipe_pit[:, IdxBranch.TEXT])
             pipe_pit[nan_mask, IdxBranch.TEXT] = get_net_option(net, 'ambient_temperature')
             pipe_pit[:, IdxBranch.AREA] = pipe_pit[:, IdxBranch.D] ** 2 * np.pi / 4
-            pipe_pit[:, IdxBranch.MDOTINIT] *= pipe_pit[:, IdxBranch.AREA] * get_fluid(net).get_density(NORMAL_TEMPERATURE)
-        if get_net_option(net, "transient"):
-            pipe_pit[:, IdxBranch.T_OUT_OLD] = pipe_pit[:, IdxBranch.TOUTINIT]
+
+        pipe_pit[:, IdxBranch.TOUTINIT] = node_pit[to_nodes, IdxBranch.TINIT]
+        pipe_pit[:, IdxBranch.MDOTINIT] *= pipe_pit[:, IdxBranch.AREA] * get_fluid(net).get_density(NORMAL_TEMPERATURE)
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
@@ -229,12 +222,21 @@ class Pipe(BranchWInternalsComponent):
                 p_from = node_pit[from_nodes, IdxNode.PAMB] + node_pit[from_nodes, IdxNode.PINIT]
                 p_to = node_pit[to_nodes, IdxNode.PAMB] + node_pit[to_nodes, IdxNode.PINIT]
                 p_mean = np.where(p_from == p_to, p_from, 2 / 3 * (p_from ** 3 - p_to ** 3) / (p_from ** 2 - p_to ** 2))
-                numerator = NORMAL_PRESSURE * node_pit[m_nodes, IdxNode.TINIT]
-                normfactor_mean = numerator * fluid.get_property("compressibility", p_mean) / (
-                            p_mean * NORMAL_TEMPERATURE)
-                normfactor_from = numerator * fluid.get_property("compressibility", p_from) / (
-                            p_from * NORMAL_TEMPERATURE)
-                normfactor_to = numerator * fluid.get_property("compressibility", p_to) / (p_to * NORMAL_TEMPERATURE)
+                factor = NORMAL_PRESSURE * node_pit[m_nodes, IdxNode.TINIT] / NORMAL_TEMPERATURE
+
+                args_from, args_to, args_mean = [p_from], [p_to], [p_mean]
+                if (hasattr(fluid.all_properties["compressibility"], "allow_2d")
+                        and fluid.all_properties["compressibility"].allow_2d):
+                    # TODO: this is only allowed without temperature calculation (assumed for gases)
+                    t_from = node_pit[from_nodes, TINIT_NODE]
+                    t_to = node_pit[to_nodes, TINIT_NODE]
+                    args_from.append(t_from)
+                    args_to.append(t_to)
+                    args_mean.append((t_from + t_to) / 2)
+
+                normfactor_mean = factor * fluid.get_compressibility(*args_mean) / p_mean
+                normfactor_from = factor * fluid.get_compressibility(*args_from) / p_from
+                normfactor_to = factor * fluid.get_compressibility(*args_to) / p_to
 
                 v_pipe_data_mean = v_pipe_data * normfactor_mean
                 v_pipe_data_from = v_pipe_data * normfactor_from
@@ -272,8 +274,9 @@ class Pipe(BranchWInternalsComponent):
         :rtype:
         """
         return [("name", dtype(object)), ("from_junction", "u4"), ("to_junction", "u4"), ("std_type", dtype(object)),
-                ("length_km", "f8"), ("diameter_m", "f8"), ("k_mm", "f8"), ("loss_coefficient", "f8"),
-                ("u_w_per_m2k", 'f8'), ("text_k", 'f8'), ("qext_w", 'f8'), ("sections", "u4"), ("in_service", 'bool'),
+                ("length_km", "f8"), ("inner_diameter_mm", "f8"), ("outer_diameter_mm", "f8"),
+                ("k_mm", "f8"), ("loss_coefficient", "f8"),
+                ("u_w_per_m2k", 'f8'), ("text_k", 'f8'), ("sections", "u4"), ("in_service", 'bool'),
                 ("type", dtype(object))]
 
     @classmethod

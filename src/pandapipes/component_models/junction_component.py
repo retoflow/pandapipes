@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025 by Fraunhofer Institute for Energy Economics
+# Copyright (c) 2020-2026 by Fraunhofer Institute for Energy Economics
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
@@ -81,11 +81,8 @@ class Junction(NodeComponent):
 
         if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
             junction_pit[:, :] = np.array([table_nr, 0, IdxNode.L] + [0] * (IdxNode.node_cols - 3))
-            junction_pit[:, IdxNode.TINIT] = junctions.tfluid_k.values
             junction_pit[:, IdxNode.ELEMENT_IDX] = junctions.index.values
             junction_pit[:, IdxNode.HEIGHT] = junctions.height_m.values
-            junction_pit[:, IdxNode.PINIT] = junctions.pn_bar.values
-            junction_pit[:, IdxNode.TINIT] = junctions.tfluid_k.values
             junction_pit[:, IdxNode.PAMB] = p_correction_height_air(junction_pit[:, IdxNode.HEIGHT])
             junction_pit[:, IdxNode.ACTIVE] = junctions.in_service.values
         else:
@@ -93,8 +90,8 @@ class Junction(NodeComponent):
             junction_pit[:, IdxNode.EXT_GRID_OCCURENCE_T] = 0
             junction_pit[:, IdxNode.LOAD] = 0
 
-        if get_net_option(net, "transient"):
-            junction_pit[:, IdxNode.TINIT_OLD] = junction_pit[:, IdxNode.TINIT]
+        junction_pit[:, IdxNode.TINIT] = junctions.tfluid_k.values
+        junction_pit[:, IdxNode.PINIT] = junctions.pn_bar.values
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
