@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025 by Fraunhofer Institute for Energy Economics
+# Copyright (c) 2020-2026 by Fraunhofer Institute for Energy Economics
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
@@ -82,7 +82,7 @@ def test_iter(create_test_net, use_numba):
     max_iter_hyd = 3 if use_numba else 3
     max_iter_therm = 3 if use_numba else 3
 
-    pandapipes.set_user_pf_options(net, iter=2)
+    pandapipes.set_user_pf_options(net, iter=2, use_numba=use_numba, tol_T=1e-4)
 
     with pytest.raises(PipeflowNotConverged):
         pandapipes.pipeflow(net, mode='sequential')
