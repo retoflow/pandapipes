@@ -27,6 +27,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+class DeserializationNotAllowed(Exception):
+    """Raised when deserialization of a type is blocked by the security allowlist."""
+
+
 MODULE_CHANGES = {"PumpStdType": "pandapipes.std_types.std_type_class",
                   "StdType": "pandapipes.std_types.std_type_class"}
 
@@ -138,7 +142,7 @@ class FromSerializableRegistryPpipe(FromSerializableRegistry):
             # only permit the specific primitive types pandapipes serializes
             if not _is_safe_to_deserialize(self.module_name, self.class_name, class_):
                 msg = f"Deserializing '{self.module_name}.{self.class_name}' is not allowed"
-                raise TypeError(msg)
+                raise DeserializationNotAllowed(msg)
             return class_(self.obj, **self.d)
 
     @from_serializable.register(class_name='MultiNet')
