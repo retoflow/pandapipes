@@ -208,41 +208,41 @@ class Pipe(BranchWInternalsComponent):
         p_from_col = sys_idx.idx(HydVarEq.PINIT, fn)
         p_to_col   = sys_idx.idx(HydVarEq.PINIT, tn)
 
-        # equation positions branch
+        # equation position branch
         branch_eq  = sys_idx.idx(HydVarEq.BRANCH, branch_idx)
 
-        # jacobi matrix branch
-        rows_branch = np.concatenate([branch_eq, branch_eq, branch_eq])
-        cols_branch = np.concatenate([mdot_col, p_from_col, p_to_col])
-        data_branch = np.concatenate([df_dm, df_dp, df_dp1])
+        # system matrix branch
+        rows_branch = np.concatenate([branch_eq, branch_eq, branch_eq]).astype(np.int32)
+        cols_branch = np.concatenate([mdot_col, p_from_col, p_to_col]).astype(np.int32)
+        data_branch = np.concatenate([df_dm, df_dp, df_dp1]).astype(np.float64)
+        load_rows_branch = branch_eq.astype(np.int32)
+        load_branch = load.astype(np.float64)
 
-        # load vector branch
-        load_rows_branch = branch_eq
-        load_branch = load
-
-        # equation positions node
+        # equation position node
         fn_eq      = sys_idx.idx(HydVarEq.NODE, fn)
         tn_eq      = sys_idx.idx(HydVarEq.NODE, tn)
 
-        # jacobi matrix node
-        rows_node = np.concatenate([fn_eq, tn_eq])
-        cols_node = np.concatenate([mdot_col, mdot_col])
-        data_node = np.concatenate([-df_dm_node, df_dm_node])
-
-        # load vector node
-        load_rows_node = np.concatenate([fn_eq, tn_eq])
-        load_node = np.concatenate([-load_fn, load_tn])
-
-        # fuse
-        rows = np.concatenate([rows_branch, rows_node])
-        cols = np.concatenate([cols_branch, cols_node])
-        data = np.concatenate([data_branch, data_node])
-        load_rows = np.concatenate([load_rows_branch, load_rows_node])
-        load_data = np.concatenate([load_branch, load_node])
+        # system matrix node
+        rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
+        cols_node = np.concatenate([mdot_col, mdot_col]).astype(np.int32)
+        data_node = np.concatenate([-df_dm_node, df_dm_node]).astype(np.float64)
+        load_rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
+        load_node = np.concatenate([-load_fn, load_tn]).astype(np.float64)
 
         registry.add(ComponentEquations(
-            rows.astype(np.int32), cols.astype(np.int32), data.astype(np.float64),
-            load_rows.astype(np.int32), load_data.astype(np.float64),
+            rows=rows_branch,
+            cols=cols_branch,
+            data=data_branch,
+            load_rows=load_rows_branch,
+            load_data=load_branch,
+        ))
+
+        registry.add(ComponentEquations(
+            rows=rows_node,
+            cols=cols_node,
+            data=data_node,
+            load_rows=load_rows_node,
+            load_data=load_node,
         ))
 
     @classmethod
@@ -268,40 +268,40 @@ class Pipe(BranchWInternalsComponent):
         t_from_col = sys_idx.idx(ThermVarEq.TINIT, fn)
         t_tn_col   = sys_idx.idx(ThermVarEq.TINIT, tn)
 
-        # equation positions branch
+        # equation position branch
         branch_eq  = sys_idx.idx(ThermVarEq.BRANCH, branch_idx)
 
-        # jacobi matrix branch
-        rows_branch = np.concatenate([branch_eq, branch_eq])
-        cols_branch = np.concatenate([t_from_col, t_out_col])
-        data_branch = np.concatenate([dfb_dt, dfb_dtout])
+        # system matrix branch
+        rows_branch = np.concatenate([branch_eq, branch_eq]).astype(np.int32)
+        cols_branch = np.concatenate([t_from_col, t_out_col]).astype(np.int32)
+        data_branch = np.concatenate([dfb_dt, dfb_dtout]).astype(np.float64)
+        load_rows_branch = branch_eq.astype(np.int32)
+        load_branch = fb.astype(np.float64)
 
-        # load vector branch
-        load_rows_branch = branch_eq
-        load_branch      = fb
-
-        # equation positions node
+        # equation position node
         tn_eq = sys_idx.idx(ThermVarEq.NODE, tn)
 
-        # jacobi matrix node
-        rows_node = np.concatenate([tn_eq, tn_eq])
-        cols_node = np.concatenate([t_tn_col, t_out_col])
-        data_node = np.concatenate([dfnt_dt, dfnt_dtout])
-
-        # load vector node
-        load_rows_node = tn_eq
-        load_node      = fnt
-
-        # fuse
-        rows = np.concatenate([rows_branch, rows_node]).astype(np.int32)
-        cols = np.concatenate([cols_branch, cols_node]).astype(np.int32)
-        data = np.concatenate([data_branch, data_node]).astype(np.float64)
-        load_rows = np.concatenate([load_rows_branch, load_rows_node]).astype(np.int32)
-        load_data = np.concatenate([load_branch, load_node]).astype(np.float64)
+        # system matrix node
+        rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
+        cols_node = np.concatenate([t_tn_col, t_out_col]).astype(np.int32)
+        data_node = np.concatenate([dfnt_dt, dfnt_dtout]).astype(np.float64)
+        load_rows_node = tn_eq.astype(np.int32)
+        load_node = fnt.astype(np.float64)
 
         registry.add(ComponentEquations(
-            rows, cols, data,
-            load_rows, load_data,
+            rows=rows_branch,
+            cols=cols_branch,
+            data=data_branch,
+            load_rows=load_rows_branch,
+            load_data=load_branch,
+        ))
+
+        registry.add(ComponentEquations(
+            rows=rows_node,
+            cols=cols_node,
+            data=data_node,
+            load_rows=load_rows_node,
+            load_data=load_node,
         ))
 
     @classmethod

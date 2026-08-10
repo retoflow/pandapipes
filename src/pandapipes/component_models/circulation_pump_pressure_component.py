@@ -76,10 +76,6 @@ class CirculationPumpPressure(CirculationPump):
         fn = b_pit[:, FROM_NODE].astype(np.int32)
         tn = b_pit[:, TO_NODE].astype(np.int32)
 
-        p_from_col = sys_idx.idx(HydVarEq.PINIT, fn)
-        p_to_col = sys_idx.idx(HydVarEq.PINIT, tn)
-        branch_eq = sys_idx.idx(HydVarEq.BRANCH, branch_idx)
-
         # Pressure residual: p_from - p_to + PL + height_correction
         p_from_abs = node_pit[fn, PINIT] + node_pit[fn, PAMB]
         p_to_abs = node_pit[tn, PINIT] + node_pit[tn, PAMB]
@@ -89,17 +85,26 @@ class CirculationPumpPressure(CirculationPump):
         const_height = rho * GRAVITATION_CONSTANT * height_diff / P_CONVERSION
         load = p_from_abs - p_to_abs + b_pit[:, PL] + const_height
 
-        # Branch equation: 1 * δp_from - 1 * δp_to = load
-        rows = np.concatenate([branch_eq, branch_eq])
-        cols = np.concatenate([p_from_col, p_to_col])
-        data = np.concatenate([np.ones(len(branch_idx)), -np.ones(len(branch_idx))])
+        # variables
+        p_from_col = sys_idx.idx(HydVarEq.PINIT, fn)
+        p_to_col = sys_idx.idx(HydVarEq.PINIT, tn)
+
+        # equation position branch
+        branch_eq = sys_idx.idx(HydVarEq.BRANCH, branch_idx)
+
+        # system matrix branch: 1 * δp_from - 1 * δp_to = load (override)
+        rows_branch = np.concatenate([branch_eq, branch_eq]).astype(np.int32)
+        cols_branch = np.concatenate([p_from_col, p_to_col]).astype(np.int32)
+        data_branch = np.concatenate([np.ones(len(branch_idx)), -np.ones(len(branch_idx))]).astype(np.float64)
+        load_rows_branch = branch_eq.astype(np.int32)
+        load_branch = load.astype(np.float64)
 
         registry.add_override(ComponentEquations(
-            rows=rows.astype(np.int32),
-            cols=cols.astype(np.int32),
-            data=data.astype(np.float64),
-            load_rows=branch_eq.astype(np.int32),
-            load_data=load.astype(np.float64),
+            rows=rows_branch,
+            cols=cols_branch,
+            data=data_branch,
+            load_rows=load_rows_branch,
+            load_data=load_branch,
             mode=EqWriteMode.UNIQUE,
         ))
 
@@ -119,25 +124,42 @@ class CirculationPumpPressure(CirculationPump):
         b_pit = branch_pit[f:t]
         tn = get_to_nodes_corrected(b_pit).astype(np.int32)
 
+        # variables
         t_out_col = sys_idx.idx(ThermVarEq.TOUTINIT, branch_idx)
-        tn_eq     = sys_idx.idx(ThermVarEq.NODE, tn)
+
+        # equation position branch
         branch_eq = sys_idx.idx(ThermVarEq.BRANCH, branch_idx)
 
-        # Outlet temperature fixed at t_flow_k
+        # system matrix branch: outlet temperature fixed at t_flow_k (override)
+        rows_branch = branch_eq.astype(np.int32)
+        cols_branch = branch_eq.astype(np.int32)
+        data_branch = np.ones(len(branch_idx), dtype=np.float64)
+        load_rows_branch = branch_eq.astype(np.int32)
+        load_branch = np.zeros(len(branch_idx), dtype=np.float64)
+
+        # equation position node
+        tn_eq = sys_idx.idx(ThermVarEq.NODE, tn)
+
+        # system matrix node: node energy balance at the receiving (to) node
+        rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
+        cols_node = np.concatenate([tn_eq, t_out_col]).astype(np.int32)
+        data_node = np.concatenate([dfnt_dt, dfnt_dtout]).astype(np.float64)
+        load_rows_node = tn_eq.astype(np.int32)
+        load_node = fnt.astype(np.float64)
+
         registry.add_override(ComponentEquations(
-            rows=branch_eq.astype(np.int32),
-            cols=branch_eq.astype(np.int32),
-            data=np.ones(len(branch_idx), dtype=np.float64),
-            load_rows=branch_eq.astype(np.int32),
-            load_data=np.zeros(len(branch_idx), dtype=np.float64),
+            rows=rows_branch,
+            cols=cols_branch,
+            data=data_branch,
+            load_rows=load_rows_branch,
+            load_data=load_branch,
             mode=EqWriteMode.UNIQUE,
         ))
 
-        # Node energy balance at the receiving (to) node
-        rows_node = np.concatenate([tn_eq, tn_eq])
-        cols_node = np.concatenate([tn_eq, t_out_col])
-        data_node = np.concatenate([dfnt_dt, dfnt_dtout])
         registry.add(ComponentEquations(
-            rows_node.astype(np.int32), cols_node.astype(np.int32), data_node.astype(np.float64),
-            tn_eq.astype(np.int32), fnt.astype(np.float64),
+            rows=rows_node,
+            cols=cols_node,
+            data=data_node,
+            load_rows=load_rows_node,
+            load_data=load_node,
         ))

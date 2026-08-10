@@ -185,18 +185,18 @@ class HeatConsumer(BranchWOInternalsComponent):
             df_dm[mask_qe_tr & ~mask_ign] = df_dm_qetr[mask_qe_tr & ~mask_ign]
             load[mask_qe_tr] = (-b_pit[mask_qe_tr, QEXT] + df_dm_qetr[mask_qe_tr] * b_pit[mask_qe_tr, MDOTINIT])
 
-        # jacobi matrix branch
+        # system matrix branch
         rows_branch = branch_eq.astype(np.int32)
         cols_branch = mdot_col.astype(np.int32)
         data_branch = df_dm.astype(np.float64)
         load_rows_branch = branch_eq.astype(np.int32)
         load_branch = load.astype(np.float64)
 
-        # equation positions nodes
+        # equation position node
         fn_eq     = sys_idx.idx(HydVarEq.NODE, fn)
         tn_eq     = sys_idx.idx(HydVarEq.NODE, tn)
 
-        # derivative and load vector nodes
+        # derivative and load vector node
         df_dm_node = np.ones_like(branch_idx)
         load_fn = -b_pit[:, MDOTINIT]
         load_tn = b_pit[:, MDOTINIT]
@@ -204,7 +204,7 @@ class HeatConsumer(BranchWOInternalsComponent):
             load_fn[mask_qe_tr & mask_ign] = 0
             load_tn[mask_qe_tr & mask_ign] = 0
 
-        # jacobi matrix node
+        # system matrix node
         rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
         cols_node = np.concatenate([mdot_col, mdot_col]).astype(np.int32)
         data_node = np.concatenate([-df_dm_node, df_dm_node]).astype(np.float64)
@@ -268,7 +268,7 @@ class HeatConsumer(BranchWOInternalsComponent):
         t_from_col = sys_idx.idx(ThermVarEq.TINIT, fn)
         t_to_col = sys_idx.idx(ThermVarEq.TINIT, tn)
 
-        # equation positions branch
+        # equation position branch
         branch_eq = sys_idx.idx(ThermVarEq.BRANCH, branch_idx)
 
         # derivative and load vector branches
@@ -280,17 +280,17 @@ class HeatConsumer(BranchWOInternalsComponent):
             dfb_dtout[mask] = 1
             fb[mask] = 0
 
-        # jacobi matrix branch
+        # system matrix branch
         rows_branch = np.concatenate([branch_eq, branch_eq]).astype(np.int32)
         cols_branch = np.concatenate([t_from_col, t_out_col]).astype(np.int32)
         data_branch = np.concatenate([dfb_dt, dfb_dtout]).astype(np.float64)
         load_rows_branch = branch_eq.astype(np.int32)
         load_branch = fb.astype(np.float64)
 
-        # equation positions node
+        # equation position node
         tn_eq = sys_idx.idx(ThermVarEq.NODE, tn)
 
-        # jacobi matrix node
+        # system matrix node
         rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
         cols_node = np.concatenate([t_to_col, t_out_col]).astype(np.int32)
         data_node = np.concatenate([dfnt_dt, dfnt_dtout]).astype(np.float64)

@@ -118,12 +118,25 @@ class Junction(NodeComponent):
         if not len(stagnant):
             return
 
-        n_eq = sys_idx.idx(ThermVarEq.NODE, stagnant)
+        # variables
         t_n_col = sys_idx.idx(ThermVarEq.TINIT, stagnant)
 
+        # equation position node
+        n_eq = sys_idx.idx(ThermVarEq.NODE, stagnant)
+
+        # system matrix node
+        rows_node = n_eq.astype(np.int32)
+        cols_node = t_n_col.astype(np.int32)
+        data_node = dfn_dt[stagnant].astype(np.float64)
+        load_rows_node = n_eq.astype(np.int32)
+        load_node = fn_node[stagnant].astype(np.float64)
+
         registry.add(ComponentEquations(
-            n_eq.astype(np.int32), t_n_col.astype(np.int32), dfn_dt[stagnant].astype(np.float64),
-            n_eq.astype(np.int32), fn_node[stagnant].astype(np.float64),
+            rows=rows_node,
+            cols=cols_node,
+            data=data_node,
+            load_rows=load_rows_node,
+            load_data=load_node,
         ))
 
     @classmethod

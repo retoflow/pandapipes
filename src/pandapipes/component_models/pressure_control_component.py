@@ -143,28 +143,52 @@ class PressureControlComponent(BranchWOInternalsComponent):
         fn = b_pit[:, FROM_NODE].astype(np.int32)
         tn = b_pit[:, TO_NODE].astype(np.int32)
 
-        mdot_col   = sys_idx.idx(HydVarEq.MDOTINIT, branch_idx)
-        p_from_col = sys_idx.idx(HydVarEq.PINIT, fn)
-        p_to_col   = sys_idx.idx(HydVarEq.PINIT, tn)
-        branch_eq  = sys_idx.idx(HydVarEq.BRANCH, branch_idx)
-        fn_eq      = sys_idx.idx(HydVarEq.NODE, fn)
-        tn_eq      = sys_idx.idx(HydVarEq.NODE, tn)
-
         # Zero out branch equation contributions for ctrl_active branches (replaced by PC constraint)
         df_dm[ctrl_active]  = 0.0
         df_dp[ctrl_active]  = 0.0
         df_dp1[ctrl_active] = 0.0
         load[ctrl_active]   = 0.0
 
-        rows = np.concatenate([branch_eq, branch_eq, branch_eq, fn_eq, tn_eq])
-        cols = np.concatenate([mdot_col, p_from_col, p_to_col, mdot_col, mdot_col])
-        data = np.concatenate([df_dm, df_dp, df_dp1, -df_dm_node, df_dm_node])
-        load_rows = np.concatenate([branch_eq, fn_eq, tn_eq])
-        load_data = np.concatenate([load, -load_fn, load_tn])
+        # variables
+        mdot_col   = sys_idx.idx(HydVarEq.MDOTINIT, branch_idx)
+        p_from_col = sys_idx.idx(HydVarEq.PINIT, fn)
+        p_to_col   = sys_idx.idx(HydVarEq.PINIT, tn)
+
+        # equation position branch
+        branch_eq  = sys_idx.idx(HydVarEq.BRANCH, branch_idx)
+
+        # system matrix branch
+        rows_branch = np.concatenate([branch_eq, branch_eq, branch_eq]).astype(np.int32)
+        cols_branch = np.concatenate([mdot_col, p_from_col, p_to_col]).astype(np.int32)
+        data_branch = np.concatenate([df_dm, df_dp, df_dp1]).astype(np.float64)
+        load_rows_branch = branch_eq.astype(np.int32)
+        load_branch = load.astype(np.float64)
+
+        # equation position node
+        fn_eq      = sys_idx.idx(HydVarEq.NODE, fn)
+        tn_eq      = sys_idx.idx(HydVarEq.NODE, tn)
+
+        # system matrix node
+        rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
+        cols_node = np.concatenate([mdot_col, mdot_col]).astype(np.int32)
+        data_node = np.concatenate([-df_dm_node, df_dm_node]).astype(np.float64)
+        load_rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
+        load_node = np.concatenate([-load_fn, load_tn]).astype(np.float64)
 
         registry.add(ComponentEquations(
-            rows.astype(np.int32), cols.astype(np.int32), data.astype(np.float64),
-            load_rows.astype(np.int32), load_data.astype(np.float64),
+            rows=rows_branch,
+            cols=cols_branch,
+            data=data_branch,
+            load_rows=load_rows_branch,
+            load_data=load_branch,
+        ))
+
+        registry.add(ComponentEquations(
+            rows=rows_node,
+            cols=cols_node,
+            data=data_node,
+            load_rows=load_rows_node,
+            load_data=load_node,
         ))
 
         # Pressure constraint for ctrl_active branches: P_ctrl_node = P_target
@@ -176,11 +200,11 @@ class PressureControlComponent(BranchWOInternalsComponent):
             p_ctrl_val = node_pit[ca_index_pc, PINIT]
 
             registry.add(ComponentEquations(
-                ca_branch_eq.astype(np.int32),
-                p_ctrl_col.astype(np.int32),
-                np.ones(len(ca_branch_eq), dtype=np.float64),
-                ca_branch_eq.astype(np.int32),
-                (p_ctrl_val - p_target).astype(np.float64),
+                rows=ca_branch_eq.astype(np.int32),
+                cols=p_ctrl_col.astype(np.int32),
+                data=np.ones(len(ca_branch_eq), dtype=np.float64),
+                load_rows=ca_branch_eq.astype(np.int32),
+                load_data=(p_ctrl_val - p_target).astype(np.float64),
             ))
 
     @classmethod
@@ -200,21 +224,45 @@ class PressureControlComponent(BranchWOInternalsComponent):
         fn = get_from_nodes_corrected(b_pit).astype(np.int32)
         tn = get_to_nodes_corrected(b_pit).astype(np.int32)
 
+        # variables
         t_out_col  = sys_idx.idx(ThermVarEq.TOUTINIT, branch_idx)
         t_from_col = sys_idx.idx(ThermVarEq.TINIT, fn)
         t_tn_col   = sys_idx.idx(ThermVarEq.TINIT, tn)
-        branch_eq  = sys_idx.idx(ThermVarEq.BRANCH, branch_idx)
-        tn_eq      = sys_idx.idx(ThermVarEq.NODE, tn)
 
-        rows = np.concatenate([branch_eq, branch_eq, tn_eq, tn_eq])
-        cols = np.concatenate([t_from_col, t_out_col, t_tn_col, t_out_col])
-        data = np.concatenate([dfb_dt, dfb_dtout, dfnt_dt, dfnt_dtout])
-        load_rows = np.concatenate([branch_eq, tn_eq])
-        load_data = np.concatenate([fb, fnt])
+        # equation position branch
+        branch_eq  = sys_idx.idx(ThermVarEq.BRANCH, branch_idx)
+
+        # system matrix branch
+        rows_branch = np.concatenate([branch_eq, branch_eq]).astype(np.int32)
+        cols_branch = np.concatenate([t_from_col, t_out_col]).astype(np.int32)
+        data_branch = np.concatenate([dfb_dt, dfb_dtout]).astype(np.float64)
+        load_rows_branch = branch_eq.astype(np.int32)
+        load_branch = fb.astype(np.float64)
+
+        # equation position node
+        tn_eq = sys_idx.idx(ThermVarEq.NODE, tn)
+
+        # system matrix node
+        rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
+        cols_node = np.concatenate([t_tn_col, t_out_col]).astype(np.int32)
+        data_node = np.concatenate([dfnt_dt, dfnt_dtout]).astype(np.float64)
+        load_rows_node = tn_eq.astype(np.int32)
+        load_node = fnt.astype(np.float64)
 
         registry.add(ComponentEquations(
-            rows.astype(np.int32), cols.astype(np.int32), data.astype(np.float64),
-            load_rows.astype(np.int32), load_data.astype(np.float64),
+            rows=rows_branch,
+            cols=cols_branch,
+            data=data_branch,
+            load_rows=load_rows_branch,
+            load_data=load_branch,
+        ))
+
+        registry.add(ComponentEquations(
+            rows=rows_node,
+            cols=cols_node,
+            data=data_node,
+            load_rows=load_rows_node,
+            load_data=load_node,
         ))
 
     @classmethod

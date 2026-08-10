@@ -56,15 +56,3 @@ class NodeComponent(Component):
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
         raise NotImplementedError
-
-    @classmethod
-    def create_pit_node_entries(cls, net, node_pit):
-        """
-
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :param node_pit:
-        :type node_pit:
-        :return: No Output.
-        """
-        raise NotImplementedError

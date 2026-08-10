@@ -109,28 +109,45 @@ class ExtGrid(NodeElementComponent):
 
         ranks = np.arange(len(slack_nodes), dtype=np.int32)
 
+        # variables
         p_col     = sys_idx.idx(HydVarEq.PINIT,         slack_nodes)
         slack_col = sys_idx.idx(HydVarEq.MDOTSLACKINIT, ranks)
-        n_eq      = sys_idx.idx(HydVarEq.NODE,           slack_nodes)
-        slack_eq  = sys_idx.idx(HydVarEq.SLACK,          ranks)
 
-        # SLACK equation (override): pressure fix — δPINIT = 0
+        # equation position slack
+        slack_eq = sys_idx.idx(HydVarEq.SLACK, ranks)
+
+        # system matrix slack: pressure fix — δPINIT = 0 (override)
+        rows_slack = slack_eq.astype(np.int32)
+        cols_slack = p_col.astype(np.int32)
+        data_slack = np.ones(len(slack_eq), dtype=np.float64)
+        load_rows_slack = slack_eq.astype(np.int32)
+        load_slack = np.zeros(len(slack_eq), dtype=np.float64)
+
+        # equation position node
+        n_eq = sys_idx.idx(HydVarEq.NODE, slack_nodes)
+
+        # system matrix node: MDOTSLACKINIT participates in mass balance
+        rows_node = n_eq.astype(np.int32)
+        cols_node = slack_col.astype(np.int32)
+        data_node = np.ones(len(n_eq), dtype=np.float64)
+        load_rows_node = n_eq.astype(np.int32)
+        load_node = node_pit[slack_nodes, MDOTSLACKINIT].astype(np.float64)
+
         registry.add(ComponentEquations(
-            rows=slack_eq.astype(np.int32),
-            cols=p_col.astype(np.int32),
-            data=np.ones(len(slack_eq), dtype=np.float64),
-            load_rows=slack_eq.astype(np.int32),
-            load_data=np.zeros(len(slack_eq), dtype=np.float64),
+            rows=rows_slack,
+            cols=cols_slack,
+            data=data_slack,
+            load_rows=load_rows_slack,
+            load_data=load_slack,
             mode=EqWriteMode.UNIQUE,
         ))
 
-        # NODE equation: MDOTSLACKINIT participates in mass balance
         registry.add(ComponentEquations(
-            rows=n_eq.astype(np.int32),
-            cols=slack_col.astype(np.int32),
-            data=np.ones(len(n_eq), dtype=np.float64),
-            load_rows=n_eq.astype(np.int32),
-            load_data=node_pit[slack_nodes, MDOTSLACKINIT].astype(np.float64),
+            rows=rows_node,
+            cols=cols_node,
+            data=data_node,
+            load_rows=load_rows_node,
+            load_data=load_node,
         ))
 
     @classmethod
@@ -159,15 +176,25 @@ class ExtGrid(NodeElementComponent):
         if not len(infeed_nodes):
             return
 
+        # variables
         t_col = sys_idx.idx(ThermVarEq.TINIT, ext_nodes)
-        n_eq  = sys_idx.idx(ThermVarEq.NODE, infeed_nodes)
+
+        # equation position node
+        n_eq = sys_idx.idx(ThermVarEq.NODE, infeed_nodes)
+
+        # system matrix node
+        rows_node = n_eq.astype(np.int32)
+        cols_node = t_col.astype(np.int32)
+        data_node = np.ones(len(n_eq), dtype=np.float64)
+        load_rows_node = n_eq.astype(np.int32)
+        load_node = np.zeros(len(n_eq), dtype=np.float64)
 
         registry.add_override(ComponentEquations(
-            rows=n_eq.astype(np.int32),
-            cols=t_col.astype(np.int32),
-            data=np.ones(len(n_eq), dtype=np.float64),
-            load_rows=n_eq.astype(np.int32),
-            load_data=np.zeros(len(n_eq), dtype=np.float64),
+            rows=rows_node,
+            cols=cols_node,
+            data=data_node,
+            load_rows=load_rows_node,
+            load_data=load_node,
             mode=EqWriteMode.MEAN,
         ))
 
