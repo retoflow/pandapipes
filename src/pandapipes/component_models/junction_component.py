@@ -9,9 +9,11 @@ import pandas as pd
 from numpy import dtype
 
 from pandapipes.component_models.abstract_models.node_models import NodeComponent
-from pandapipes.component_models.component_toolbox import p_correction_height_air
-from pandapipes.idx_node import L, ELEMENT_IDX, PINIT, node_cols, HEIGHT, TINIT, PAMB, \
-    ACTIVE as ACTIVE_ND, EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T, LOAD
+from pandapipes.component_models.component_toolbox import build_pit_entries, p_correction_height_air
+from pandapipes.idx_node import (L, ELEMENT_IDX, PINIT, HEIGHT, TINIT, PAMB,
+                                  ACTIVE as ACTIVE_ND, EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T,
+                                  LOAD, TABLE_IDX as NODE_TABLE_IDX, NODE_TYPE)
+from pandapipes.pf.system_index import PitEntries, ComponentEquations, ThermVarEq
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_table_number, \
     get_lookup
 from pandapipes.pf.pipeflow_setup import get_net_option
@@ -25,6 +27,20 @@ class Junction(NodeComponent):
     @classmethod
     def table_name(cls):
         return "junction"
+
+    @classmethod
+    def get_component_input(cls):
+        """
+
+        :return:
+        :rtype:
+        """
+        return [('name', dtype(object)),
+                ('pn_bar', 'f8'),
+                ("tfluid_k", 'f8'),
+                ("height_m", 'f8'),
+                ('in_service', 'bool'),
+                ('type', dtype(object))]
 
     @classmethod
     def create_node_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start,
@@ -63,36 +79,73 @@ class Junction(NodeComponent):
         return end, current_table + 1
 
     @classmethod
-    def create_pit_node_entries(cls, net, node_pit):
-        """
-        Function which creates pit node entries.
-
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :param node_pit:
-        :type node_pit:
-        :return: No Output.
-        """
+    def register_pit_node_entries(cls, net, node_pit, registry) -> None:
         ft_lookup = get_lookup(net, "node", "from_to")
         table_nr = get_table_number(get_lookup(net, "node", "table"), cls.table_name())
         f, t = ft_lookup[cls.table_name()]
-
         junctions = net[cls.table_name()]
-        junction_pit = node_pit[f:t, :]
+        rows = np.arange(f, t, dtype=np.int32)
 
         if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
-            junction_pit[:, :] = np.array([table_nr, 0, L] + [0] * (node_cols - 3))
-            junction_pit[:, ELEMENT_IDX] = junctions.index.values
-            junction_pit[:, HEIGHT] = junctions.height_m.values
-            junction_pit[:, PAMB] = p_correction_height_air(junction_pit[:, HEIGHT])
-            junction_pit[:, ACTIVE_ND] = junctions.in_service.values
+            height_vals = junctions.height_m.values
+            registry.add(PitEntries(*build_pit_entries(
+                rows,
+                [NODE_TABLE_IDX, ELEMENT_IDX, NODE_TYPE, HEIGHT, PAMB, ACTIVE_ND, TINIT, PINIT],
+                [float(table_nr), junctions.index.values.astype(float), float(L),
+                 height_vals, p_correction_height_air(height_vals),
+                 junctions.in_service.values.astype(float),
+                 junctions.tfluid_k.values, junctions.pn_bar.values],
+            )))
         else:
-            junction_pit[:, EXT_GRID_OCCURENCE] = 0
-            junction_pit[:, EXT_GRID_OCCURENCE_T] = 0
-            junction_pit[:, LOAD] = 0
+            registry.add(PitEntries(*build_pit_entries(
+                rows,
+                [EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T, LOAD, TINIT, PINIT],
+                [0., 0., 0., junctions.tfluid_k.values, junctions.pn_bar.values],
+            )))
 
-        junction_pit[:, TINIT] = junctions.tfluid_k.values
-        junction_pit[:, PINIT] = junctions.pn_bar.values
+    @classmethod
+    def register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry) -> None:
+        from pandapipes.pf.derivative_calculation import calculate_derivatives_node_thermal
+
+        options = {"use_numba": get_net_option(net, "use_numba")}
+        node_pit_old = net["_active_old_pit"]["node"]
+
+        fn_node, dfn_dt = calculate_derivatives_node_thermal(
+            net, branch_pit, node_pit, node_pit_old, options
+        )
+
+        stagnant = np.where(dfn_dt != 0)[0].astype(np.int32)
+        if not len(stagnant):
+            return
+
+        n_eq = sys_idx.idx(ThermVarEq.NODE, stagnant)
+        t_n_col = sys_idx.idx(ThermVarEq.TINIT, stagnant)
+
+        registry.add(ComponentEquations(
+            n_eq.astype(np.int32), t_n_col.astype(np.int32), dfn_dt[stagnant].astype(np.float64),
+            n_eq.astype(np.int32), fn_node[stagnant].astype(np.float64),
+        ))
+
+    @classmethod
+    def geodata(cls):
+        """
+
+        :return:
+        :rtype:
+        """
+        return [("x", "f8"), ("y", "f8")]
+
+    @classmethod
+    def get_result_table(cls, net):
+        """
+
+        :param net: The pandapipes network
+        :type net: pandapipesNet
+        :return: (columns, all_float) - the column names and whether they are all float type. Only
+                if False, returns columns as tuples also specifying the dtypes
+        :rtype: (list, bool)
+        """
+        return ["p_bar", "t_k"], True
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
@@ -143,38 +196,3 @@ class Junction(NodeComponent):
         #     res_table["t_k"].values[junctions_connected_ht] = junction_pit[:, TINIT]
         res_table["p_bar"].values[:] = junction_pit[:, PINIT]
         res_table["t_k"].values[:] = junction_pit[:, TINIT]
-
-    @classmethod
-    def get_component_input(cls):
-        """
-
-        :return:
-        :rtype:
-        """
-        return [('name', dtype(object)),
-                ('pn_bar', 'f8'),
-                ("tfluid_k", 'f8'),
-                ("height_m", 'f8'),
-                ('in_service', 'bool'),
-                ('type', dtype(object))]
-
-    @classmethod
-    def geodata(cls):
-        """
-
-        :return:
-        :rtype:
-        """
-        return [("x", "f8"), ("y", "f8")]
-
-    @classmethod
-    def get_result_table(cls, net):
-        """
-
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :return: (columns, all_float) - the column names and whether they are all float type. Only
-                if False, returns columns as tuples also specifying the dtypes
-        :rtype: (list, bool)
-        """
-        return ["p_bar", "t_k"], True

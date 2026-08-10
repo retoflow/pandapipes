@@ -20,6 +20,10 @@ class MassStorage(ConstFlow):
         return 1
 
     @classmethod
+    def get_connected_node_type(cls):
+        return Junction
+
+    @classmethod
     def get_component_input(cls):
         """
 
@@ -48,7 +52,3 @@ class MassStorage(ConstFlow):
         :rtype: (list, bool)
         """
         return ["mdot_kg_per_s"], True
-
-    @classmethod
-    def get_connected_node_type(cls):
-        return Junction

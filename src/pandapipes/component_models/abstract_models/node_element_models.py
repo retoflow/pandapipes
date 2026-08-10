@@ -22,6 +22,10 @@ class NodeElementComponent(Component):
         raise NotImplementedError
 
     @classmethod
+    def active_identifier(cls):
+        raise NotImplementedError
+
+    @classmethod
     def get_connected_node_type(cls):
         raise NotImplementedError
 
@@ -34,7 +38,7 @@ class NodeElementComponent(Component):
         raise NotImplementedError
 
     @classmethod
-    def active_identifier(cls):
+    def extract_results(cls, net, options, branch_results, mode):
         raise NotImplementedError
 
     @classmethod
@@ -48,8 +52,4 @@ class NodeElementComponent(Component):
         :type node_pit:
         :return: No Output.
         """
-        raise NotImplementedError
-
-    @classmethod
-    def extract_results(cls, net, options, branch_results, mode):
         raise NotImplementedError

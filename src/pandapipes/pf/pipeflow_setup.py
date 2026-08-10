@@ -169,8 +169,7 @@ def get_lookup(net, pit_type="node", lookup_type="index"):
     lookup_type = lookup_type.lower()
     all_lookup_types = ["index", "table", "from_to", "active_hydraulics", "active_heat_transfer",
                         "length", "from_to_active_hydraulics", "from_to_active_heat_transfer",
-                        "index_active_hydraulics", "index_active_heat_transfer", "zero_flow",
-                        "old_pit_cols"]
+                        "index_active_hydraulics", "index_active_heat_transfer", "old_pit_cols"]
     if lookup_type not in all_lookup_types:
         type_names = "', '".join(all_lookup_types)
         logger.error("No lookup type '%s' exists. Please choose one of '%s'."
@@ -392,10 +391,18 @@ def initialize_pit(net):
     if get_net_option(net, "transient") and get_net_option(net,"simulation_time_step") != 0 and net.converged:
         create_old_pit(net, [TINIT], [TOUTINIT])
 
+    from pandapipes.pf.system_index import PitRegistry
+    node_pit = pit["node"]
+    branch_pit = pit["branch"]
+
+    branch_registry = PitRegistry()
+    node_registry = PitRegistry()
     for comp in net['component_list']:
-        comp.create_pit_node_entries(net, pit["node"])
-        comp.create_pit_branch_entries(net, pit["branch"])
+        comp.register_pit_branch_entries(net, branch_pit, node_pit, branch_registry)
+        comp.register_pit_node_entries(net, node_pit, node_registry)
         comp.create_component_array(net, pit["components"])
+    branch_registry.apply(branch_pit)
+    node_registry.apply(node_pit)
 
     if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0 or not net.converged:
         # This needs to be done after the pit values are set
@@ -426,8 +433,8 @@ def create_empty_pit(net):
     node_length = get_lookup(net, "node", "length")
     branch_length = get_lookup(net, "branch", "length")
     # init empty pit
-    pit = {"node": np.empty((node_length, node_cols), dtype=np.float64),
-           "branch": np.empty((branch_length, branch_cols), dtype=np.float64),
+    pit = {"node": np.zeros((node_length, node_cols), dtype=np.float64),
+           "branch": np.zeros((branch_length, branch_cols), dtype=np.float64),
            "components": {}}
     net["_pit"] = pit
     return pit
@@ -511,6 +518,7 @@ def create_lookups(net):
     internal_nodes = dict()
     internal_branches = dict()
 
+    # Phase 1: node and branch lookups
     for comp in net['component_list']:
         branch_from, branch_table_nr = comp.create_branch_lookups(
             net, branch_ft_lookups, branch_table_lookups, branch_idx_lookups, branch_from, branch_table_nr,
@@ -802,6 +810,26 @@ def reduce_pit(net, mode="hydraulics"):
 
     net["_active_pit"] = active_pit
     net["_active_old_pit"] = active_pit_old
+
+
+def compute_infeed_nodes(branch_pit, node_pit):
+    """
+    Mark nodes that feed into the network (source nodes) in node_pit[:, INFEED].
+
+    A node is considered an infeed if it appears as a from-node of a branch with
+    active flow but never as a to-node of any such branch. Must be called with the
+    global branch_pit (not a per-component slice) so that cross-component topology
+    is taken into account.
+    """
+    from pandapipes.idx_branch import MDOTINIT
+    from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
+
+    branches_flow = (~np.isnan(branch_pit[:, MDOTINIT])
+                     & ~np.isclose(branch_pit[:, MDOTINIT], 0, rtol=1e-10, atol=1e-10))
+    from_nodes = get_from_nodes_corrected(branch_pit)
+    to_nodes = get_to_nodes_corrected(branch_pit)
+    infeed = np.setdiff1d(from_nodes[branches_flow], to_nodes[branches_flow])
+    node_pit[infeed, INFEED] = True
 
 
 def check_infeed_number(node_pit):

@@ -22,6 +22,10 @@ class NodeComponent(Component):
         raise NotImplementedError
 
     @classmethod
+    def get_component_input(cls):
+        raise NotImplementedError
+
+    @classmethod
     def create_node_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start,
                             current_table, internals):
         """
@@ -46,6 +50,14 @@ class NodeComponent(Component):
         raise NotImplementedError
 
     @classmethod
+    def get_result_table(cls, net):
+        raise NotImplementedError
+
+    @classmethod
+    def extract_results(cls, net, options, branch_results, mode):
+        raise NotImplementedError
+
+    @classmethod
     def create_pit_node_entries(cls, net, node_pit):
         """
 
@@ -55,16 +67,4 @@ class NodeComponent(Component):
         :type node_pit:
         :return: No Output.
         """
-        raise NotImplementedError
-
-    @classmethod
-    def get_component_input(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def get_result_table(cls, net):
-        raise NotImplementedError
-
-    @classmethod
-    def extract_results(cls, net, options, branch_results, mode):
         raise NotImplementedError

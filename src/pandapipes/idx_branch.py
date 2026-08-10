@@ -28,26 +28,11 @@ PL = 18 # Pressure lift [bar]
 TL = 19 # Temperature lift [K]
 
 MDOTINIT = 20  # mass in  [m/s]
-MDOTINIT_T = 21
+TOUTINIT = 21  # Internal slot for outlet pipe temperature
+
 FROM_NODE_T_SWITCHED = 22 # flag to indicate if the from and to node are switched in the thermal calculation
-TOUTINIT = 23  # Internal slot for outlet pipe temperature
-FLOW_RETURN_CONNECT = 24 # Make sure that return and flow side are connected to the central pump, respectively
+FLOW_RETURN_CONNECT = 23 # Make sure that return and flow side are connected to the central pump, respectively
 
-JAC_DERIV_DM = 25  # Slot for the derivative by mass
-JAC_DERIV_DP = 26  # Slot for the derivative by pressure from_node
-JAC_DERIV_DP1 = 27  # Slot for the derivative by pressure to_node
-JAC_DERIV_DM_NODE = 28  # Slot for the derivative by mass for the nodes connected to branch
-LOAD_VEC_BRANCHES = 29  # Slot for the load vector for the branches
-LOAD_VEC_NODES_FROM = 30  # Slot for the load vector of the from nodes connected to branch
-LOAD_VEC_NODES_TO = 31  # Slot for the load vector of the to nodes connected to branch
+DP_FRICT_LOSS = 24
 
-JAC_DERIV_DT = 32
-JAC_DERIV_DTOUT = 33
-JAC_DERIV_DT_NODE = 34  # Slot for the node equation derivative of T for the nodes branch is connected from
-JAC_DERIV_DTOUT_NODE = 35  # Slot for the node equation derivative of T for the corresponding branch
-LOAD_VEC_BRANCHES_T = 36
-LOAD_VEC_NODES_TO_T = 37 # Slot for the load vector of the to nodes connected to branch
-
-DP_FRICT_LOSS = 38
-
-branch_cols = 39
+branch_cols = 25

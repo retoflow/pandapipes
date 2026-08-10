@@ -7,14 +7,23 @@ from numpy import dtype
 
 from pandapipes.component_models.abstract_models.branch_wo_internals_models import \
     BranchWOInternalsComponent
-from pandapipes.component_models.component_toolbox import get_component_array
-from pandapipes.component_models import standard_branch_wo_internals_result_lookup
+from pandapipes.component_models.component_toolbox import (
+    build_pit_entries, standard_branch_wo_internals_result_lookup,
+)
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import DIRECTED, \
-    JAC_DERIV_DP, JAC_DERIV_DP1, JAC_DERIV_DM, BRANCH_TYPE, LOSS_COEFFICIENT as LC, PC as PC_BRANCH
-from pandapipes.idx_node import PINIT, NODE_TYPE, PC as PC_NODE
-from pandapipes.pf.pipeflow_setup import get_lookup
+from pandapipes.idx_branch import (
+    DIRECTED, ELEMENT_IDX, FROM_NODE, LOSS_COEFFICIENT as LC, TO_NODE,
+)
+from pandapipes.idx_node import PINIT
+from pandapipes.pf.derivative_calculation import (
+    calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal,
+)
+from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
+from pandapipes.pf.pipeflow_setup import get_lookup, get_net_option
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
+from pandapipes.pf.system_index import (
+    ComponentEquations, HydVarEq, PitEntries, PitWriteMode, ThermVarEq,
+)
 from pandapipes.properties.fluids import get_fluid
 
 
@@ -37,26 +46,60 @@ class PressureControlComponent(BranchWOInternalsComponent):
         return "in_service"
 
     @classmethod
-    def from_to_node_cols(cls):
-        return "from_junction", "to_junction"
-
-    @classmethod
     def get_connected_node_type(cls):
         return Junction
 
     @classmethod
-    def create_component_array(cls, net, component_pits):
-        """
-        Function which creates an internal array of the component in analogy to the pit, but with
-        component specific entries, that are not needed in the pit.
+    def from_to_node_cols(cls):
+        return "from_junction", "to_junction"
 
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :param component_pits: dictionary of component specific arrays
-        :type component_pits: dict
-        :return:
-        :rtype:
-        """
+    @classmethod
+    def get_component_input(cls):
+        return [("name", dtype(object)),
+                ("from_junction", "u4"),
+                ("to_junction", "u4"),
+                ("controlled_junction", "u4"),
+                ("controlled_p_bar", "f8"),
+                ("control_active", "bool"),
+                ("loss_coefficient", "f8"),
+                ("in_service", 'bool'),
+                ("type", dtype(object))]
+
+    @classmethod
+    def register_pit_node_entries(cls, net, node_pit, registry) -> None:
+        pcs = net[cls.table_name()]
+        controlled = pcs.control_active.values & pcs.in_service.values
+        if not np.any(controlled):
+            return
+        juncts = pcs['controlled_junction'].values[controlled]
+        press = pcs['controlled_p_bar'].values[controlled]
+        junction_idx_lookup = get_lookup(net, "node", "index")[
+            cls.get_connected_node_type().table_name()
+        ]
+        index_pc = junction_idx_lookup[juncts]
+        registry.add_override(PitEntries(
+            index_pc.astype(np.int32),
+            np.full(len(index_pc), PINIT, dtype=np.int32),
+            press.astype(np.float64),
+            mode=PitWriteMode.MEAN,
+        ))
+
+    @classmethod
+    def register_pit_branch_entries(cls, net, branch_pit, node_pit, registry) -> None:
+        super().register_pit_branch_entries(net, branch_pit, node_pit, registry)
+
+        f, t = get_lookup(net, "branch", "from_to")[cls.table_name()]
+        tbl = net[cls.table_name()]
+        if not len(tbl):
+            return
+
+        rows = np.arange(f, t, dtype=np.int32)
+        registry.add(PitEntries(*build_pit_entries(
+            rows, [LC, DIRECTED], [tbl.loss_coefficient.values, True],
+        )))
+
+    @classmethod
+    def create_component_array(cls, net, component_pits):
         tbl = net[cls.table_name()]
         pc_array = np.zeros(shape=(len(tbl), cls.internal_cols), dtype=np.float64)
         pc_array[:, cls.JUNCTS] = tbl["controlled_junction"].values
@@ -65,81 +108,117 @@ class PressureControlComponent(BranchWOInternalsComponent):
         component_pits[cls.table_name()] = pc_array
 
     @classmethod
-    def create_pit_node_entries(cls, net, node_pit):
-        pcs = net[cls.table_name()]
-        controlled = pcs.control_active.values & pcs.in_service.values
-        juncts = pcs['controlled_junction'].values[controlled]
-        press = pcs['controlled_p_bar'].values[controlled]
-        junction_idx_lookups = get_lookup(net, "node", "index")[
-            cls.get_connected_node_type().table_name()]
-        index_pc = junction_idx_lookups[juncts]
-        node_pit[index_pc, PINIT] = press
+    def register_hydraulic_equations(cls, net, branch_pit, node_pit, sys_idx, registry) -> None:
+        f, t = get_lookup(net, "branch", "from_to_active_hydraulics")[cls.table_name()]
+        branch_idx = np.arange(f, t, dtype=np.int32)
+        if not len(branch_idx):
+            return
 
-    @classmethod
-    def create_pit_branch_entries(cls, net, branch_pit):
-        """
-        Function which creates pit branch entries with a specific table.
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :param branch_pit:
-        :type branch_pit:
-        :return: No Output.
-        """
-        pc_pit = super().create_pit_branch_entries(net, branch_pit)
-        pc_pit[net[cls.table_name()].control_active.values, BRANCH_TYPE] = PC_BRANCH
-        pc_pit[:, LC] = net[cls.table_name()].loss_coefficient.values
-        pc_pit[:, DIRECTED] = True
+        options = {"use_numba": get_net_option(net, "use_numba"),
+                   "friction_model": get_net_option(net, "friction_model")}
 
+        b_pit = branch_pit[f:t]
+        tbl_idx = b_pit[:, ELEMENT_IDX].astype(np.int32)
+        tbl = net[cls.table_name()]
 
-    @classmethod
-    def adaption_before_derivatives_hydraulic(cls, net,
-                                              branch_pit, node_pit,
-                                              branch_pit_old, node_pit_old,
-                                              idx_lookups, options):
-        pc_array = get_component_array(net, cls.table_name())
-        junction_idx_lookups_active = get_lookup(net, "node", "index_active_hydraulics")[
+        ctrl_active = tbl.control_active.values[tbl_idx].astype(bool)
+        in_service_arr = tbl.in_service.values[tbl_idx].astype(bool)
+        ctrl_juncts = tbl['controlled_junction'].values[tbl_idx].astype(np.int32)
+
+        junction_idx_active = get_lookup(net, "node", "index_active_hydraulics")[
             cls.get_connected_node_type().table_name()
         ]
-        in_service = pc_array[:, cls.IN_SERVICE].astype(bool)
-        index_pc = junction_idx_lookups_active[pc_array[in_service, cls.JUNCTS].astype(np.int32)]
-        if np.any(index_pc == -1):
+        index_pc = junction_idx_active[ctrl_juncts]
+
+        if np.any(index_pc[in_service_arr] == -1):
             raise UserWarning(
-                f"The following controlled junction(s) were identified as disconnected, although"
-                f" the controlling pressure controller is in service: "
-                f"{pc_array[in_service, cls.JUNCTS][index_pc == -1].astype(np.int32)}"
+                f"Controlled junction(s) are disconnected while the pressure controller is in "
+                f"service: {ctrl_juncts[in_service_arr][index_pc[in_service_arr] == -1]}"
             )
-        controlled = pc_array[in_service, cls.CONTROLLED].astype(bool)
-        node_pit[index_pc[controlled], NODE_TYPE] = PC_NODE
+
+        df_dm, df_dp, df_dp1, df_dm_node, load, load_fn, load_tn = (
+            calculate_derivatives_hydraulic(net, b_pit, node_pit, options)
+        )
+
+        fn = b_pit[:, FROM_NODE].astype(np.int32)
+        tn = b_pit[:, TO_NODE].astype(np.int32)
+
+        mdot_col   = sys_idx.idx(HydVarEq.MDOTINIT, branch_idx)
+        p_from_col = sys_idx.idx(HydVarEq.PINIT, fn)
+        p_to_col   = sys_idx.idx(HydVarEq.PINIT, tn)
+        branch_eq  = sys_idx.idx(HydVarEq.BRANCH, branch_idx)
+        fn_eq      = sys_idx.idx(HydVarEq.NODE, fn)
+        tn_eq      = sys_idx.idx(HydVarEq.NODE, tn)
+
+        # Zero out branch equation contributions for ctrl_active branches (replaced by PC constraint)
+        df_dm[ctrl_active]  = 0.0
+        df_dp[ctrl_active]  = 0.0
+        df_dp1[ctrl_active] = 0.0
+        load[ctrl_active]   = 0.0
+
+        rows = np.concatenate([branch_eq, branch_eq, branch_eq, fn_eq, tn_eq])
+        cols = np.concatenate([mdot_col, p_from_col, p_to_col, mdot_col, mdot_col])
+        data = np.concatenate([df_dm, df_dp, df_dp1, -df_dm_node, df_dm_node])
+        load_rows = np.concatenate([branch_eq, fn_eq, tn_eq])
+        load_data = np.concatenate([load, -load_fn, load_tn])
+
+        registry.add(ComponentEquations(
+            rows.astype(np.int32), cols.astype(np.int32), data.astype(np.float64),
+            load_rows.astype(np.int32), load_data.astype(np.float64),
+        ))
+
+        # Pressure constraint for ctrl_active branches: P_ctrl_node = P_target
+        if np.any(ctrl_active):
+            ca_branch_eq = branch_eq[ctrl_active]
+            ca_index_pc = index_pc[ctrl_active]
+            p_ctrl_col = sys_idx.idx(HydVarEq.PINIT, ca_index_pc)
+            p_target = tbl.controlled_p_bar.values[tbl_idx[ctrl_active]]
+            p_ctrl_val = node_pit[ca_index_pc, PINIT]
+
+            registry.add(ComponentEquations(
+                ca_branch_eq.astype(np.int32),
+                p_ctrl_col.astype(np.int32),
+                np.ones(len(ca_branch_eq), dtype=np.float64),
+                ca_branch_eq.astype(np.int32),
+                (p_ctrl_val - p_target).astype(np.float64),
+            ))
 
     @classmethod
-    def adaption_after_derivatives_hydraulic(cls, net,
-                                             branch_pit, node_pit,
-                                             branch_pit_old, node_pit_old,
-                                             idx_lookups, options):
-        # set all PC branches to derivatives to 0
-        f, t = idx_lookups[cls.table_name()]
-        press_pit = branch_pit[f:t, :]
-        pc_branch = press_pit[:, BRANCH_TYPE] == PC_BRANCH
-        press_pit[pc_branch, JAC_DERIV_DP] = 0
-        press_pit[pc_branch, JAC_DERIV_DP1] = 0
-        press_pit[pc_branch, JAC_DERIV_DM] = 0
+    def register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry) -> None:
+        f, t = get_lookup(net, "branch", "from_to_active_heat_transfer")[cls.table_name()]
+        branch_idx = np.arange(f, t, dtype=np.int32)
+        if not len(branch_idx):
+            return
+        options = {"use_numba": get_net_option(net, "use_numba")}
+        branch_pit_old = net["_active_old_pit"]["branch"]
+        fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout = (
+            calculate_derivatives_branch_thermal(net, branch_pit[f:t], node_pit,
+                                          branch_pit_old[f:t], options)
+        )
+
+        b_pit = branch_pit[f:t]
+        fn = get_from_nodes_corrected(b_pit).astype(np.int32)
+        tn = get_to_nodes_corrected(b_pit).astype(np.int32)
+
+        t_out_col  = sys_idx.idx(ThermVarEq.TOUTINIT, branch_idx)
+        t_from_col = sys_idx.idx(ThermVarEq.TINIT, fn)
+        t_tn_col   = sys_idx.idx(ThermVarEq.TINIT, tn)
+        branch_eq  = sys_idx.idx(ThermVarEq.BRANCH, branch_idx)
+        tn_eq      = sys_idx.idx(ThermVarEq.NODE, tn)
+
+        rows = np.concatenate([branch_eq, branch_eq, tn_eq, tn_eq])
+        cols = np.concatenate([t_from_col, t_out_col, t_tn_col, t_out_col])
+        data = np.concatenate([dfb_dt, dfb_dtout, dfnt_dt, dfnt_dtout])
+        load_rows = np.concatenate([branch_eq, tn_eq])
+        load_data = np.concatenate([fb, fnt])
+
+        registry.add(ComponentEquations(
+            rows.astype(np.int32), cols.astype(np.int32), data.astype(np.float64),
+            load_rows.astype(np.int32), load_data.astype(np.float64),
+        ))
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
-        """
-        Function that extracts certain results.
-
-        :param mode:
-        :type mode:
-        :param branch_results:
-        :type branch_results:
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :param options:
-        :type options:
-        :return: No Output.
-        """
-
         required_results_hyd, required_results_ht = standard_branch_wo_internals_result_lookup(net)
 
         extract_branch_results_without_internals(net, branch_results, required_results_hyd,
@@ -152,36 +231,7 @@ class PressureControlComponent(BranchWOInternalsComponent):
         res_table["deltap_bar"].values[:] = p_to - p_from
 
     @classmethod
-    def get_component_input(cls):
-        """
-
-        Get component input.
-
-        :return:
-        :rtype:
-        """
-        return [("name", dtype(object)),
-                ("from_junction", "u4"),
-                ("to_junction", "u4"),
-                ("controlled_junction", "u4"),
-                ("controlled_p_bar", "f8"),
-                ("control_active", "bool"),
-                ("loss_coefficient", "f8"),
-                ("in_service", 'bool'),
-                ("type", dtype(object))]
-
-    @classmethod
     def get_result_table(cls, net):
-        """
-
-        Gets the result table.
-
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :return: (columns, all_float) - the column names and whether they are all float type. Only
-                if False, returns columns as tuples also specifying the dtypes
-        :rtype: (list, bool)
-        """
         if get_fluid(net).is_gas:
             output = ["p_from_bar", "p_to_bar",
                       "t_from_k", "t_to_k", "t_outlet_k", "mdot_from_kg_per_s", "mdot_to_kg_per_s",

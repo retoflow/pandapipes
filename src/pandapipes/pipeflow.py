@@ -3,19 +3,20 @@
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
+from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import spsolve
 
-from pandapipes.idx_branch import MDOTINIT, TOUTINIT, FROM_NODE_T_SWITCHED, ACTIVE as ACTIVE_BRANCH, BRANCH_TYPE
-from pandapipes.idx_node import PINIT, TINIT, MDOTSLACKINIT, NODE_TYPE, P, ACTIVE as ACTIVE_NODE
-from pandapipes.pf.build_system_matrix import build_system_matrix
-from pandapipes.pf.derivative_calculation import (calculate_derivatives_hydraulic,
-                                                  calculate_derivatives_thermal)
+from pandapipes.idx_branch import (MDOTINIT, TOUTINIT, FROM_NODE_T_SWITCHED, ACTIVE as ACTIVE_BRANCH,
+                                   BRANCH_TYPE)
+from pandapipes.idx_node import PINIT, TINIT, MDOTSLACKINIT, NODE_TYPE, P, ACTIVE as ACTIVE_NODE, INFEED
+from pandapipes.pf.system_index import HydraulicSystemIndex, HeatSystemIndex, ComponentRegistry
 from pandapipes.pf.pipeflow_setup import (
     get_net_option, get_net_options, set_net_option, init_options, create_internal_results,
     write_internal_results, get_lookup, create_lookups, initialize_pit, reduce_pit,
     set_user_pf_options, init_all_result_tables, identify_active_nodes_branches,
-    check_infeed_number, PipeflowNotConverged
+    check_infeed_number, compute_infeed_nodes, PipeflowNotConverged
 )
+from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.result_extraction import extract_all_results, extract_results_active_pit
 
 try:
@@ -256,37 +257,23 @@ def solve_hydraulics(net):
     while connected_restarted:
         branch_pit = net["_active_pit"]["branch"]
         node_pit = net["_active_pit"]["node"]
-        branch_pit_old = net["_active_old_pit"]["branch"]
-        node_pit_old = net["_active_old_pit"]["node"]
-        branch_lookups = get_lookup(net, "branch", "from_to_active_hydraulics")
-        for comp in net['component_list']:
-            comp.adaption_before_derivatives_hydraulic(net,
-                                                       branch_pit, node_pit,
-                                                       branch_pit_old, node_pit_old,
-                                                       branch_lookups,
-                                                       options)
-        calculate_derivatives_hydraulic(net,
-                                        branch_pit, node_pit,
-                                        branch_pit_old, node_pit_old,
-                                        options)
-        for comp in net['component_list']:
-            comp.adaption_after_derivatives_hydraulic(
-                net,
-                branch_pit, node_pit,
-                branch_pit_old, node_pit_old,
-                branch_lookups, options)
-
         connected_restarted = _restart_connectivity_check(net)
-    # epsilon is node [pressure] slack nodes and load vector branch prsr difference
-    # jacobian is the derivatives
-    jacobian, epsilon = build_system_matrix(net, branch_pit, node_pit, False)
+
+    sys_idx = HydraulicSystemIndex(node_pit, branch_pit)
+    eq_registry = ComponentRegistry()
+
+    for comp in net['component_list']:
+        comp.register_hydraulic_equations(net, branch_pit, node_pit, sys_idx, eq_registry)
+
+    sz = sys_idx.size()
+    rows, cols, data, epsilon = eq_registry.assemble(sz)
+    jacobian = csr_matrix((data, (rows, cols)), shape=(sz, sz))
 
     m_init_old = branch_pit[:, MDOTINIT].copy()
     p_init_old = node_pit[:, PINIT].copy()
     slack_nodes = np.where(node_pit[:, NODE_TYPE] == P)[0]
     msl_init_old = node_pit[slack_nodes, MDOTSLACKINIT].copy()
 
-    # x is next step pressures and velocity
     x = spsolve(jacobian, epsilon)
 
     branch_pit[:, MDOTINIT] -= x[len(node_pit):len(node_pit) + len(branch_pit)] * options["alpha"]
@@ -294,8 +281,9 @@ def solve_hydraulics(net):
     node_pit[slack_nodes, MDOTSLACKINIT] -= x[len(node_pit) + len(branch_pit):]
 
     filtered = [None, None, slack_nodes]
-    return [branch_pit[:, MDOTINIT], m_init_old, node_pit[:, PINIT], p_init_old, node_pit[slack_nodes, MDOTSLACKINIT]
-            ,msl_init_old], epsilon, filtered
+
+    return [branch_pit[:, MDOTINIT], m_init_old, node_pit[:, PINIT], p_init_old,
+            node_pit[slack_nodes, MDOTSLACKINIT], msl_init_old], epsilon, filtered
 
 def rerun_hydraulics(net):
     rerun = False
@@ -361,30 +349,19 @@ def solve_temperature(net):
     options = net["_options"]
     branch_pit = net["_active_pit"]["branch"]
     node_pit = net["_active_pit"]["node"]
-    branch_pit_old = net["_active_old_pit"]["branch"]
-    node_pit_old = net["_active_old_pit"]["node"]
-
-
-    branch_lookups = get_lookup(net, "branch", "from_to_active_heat_transfer")
 
     # Negative velocity values are turned to positive ones (including exchange of from_node and
     # to_node for temperature calculation
     branch_pit[:, FROM_NODE_T_SWITCHED] = branch_pit[:, MDOTINIT] < -2e-11
 
+    node_pit[:, INFEED] = False
+    compute_infeed_nodes(branch_pit, node_pit)
+
+    sys_idx = HeatSystemIndex(node_pit, branch_pit)
+    eq_registry = ComponentRegistry()
+
     for comp in net['component_list']:
-        comp.adaption_before_derivatives_thermal(net,
-                                                 branch_pit, node_pit,
-                                                 branch_pit_old, node_pit_old,
-                                                 branch_lookups, options)
-    calculate_derivatives_thermal(net,
-                                  branch_pit, node_pit,
-                                  branch_pit_old, node_pit_old,
-                                  options)
-    for comp in net['component_list']:
-        comp.adaption_after_derivatives_thermal(net,
-                                                branch_pit, node_pit,
-                                                branch_pit_old, node_pit_old,
-                                                branch_lookups, options)
+        comp.register_thermal_equations(net, branch_pit, node_pit, sys_idx, eq_registry)
 
     t_init_old = node_pit[:, TINIT].copy()
     t_out_old = branch_pit[:, TOUTINIT].copy()
@@ -393,7 +370,9 @@ def solve_temperature(net):
         return [branch_pit[:, TOUTINIT], t_out_old, node_pit[:, TINIT], t_init_old], np.array([
             np.nan]), filtered
 
-    jacobian, epsilon = build_system_matrix(net, branch_pit, node_pit, True)
+    sz = sys_idx.size()
+    rows, cols, data, epsilon = eq_registry.assemble(sz)
+    jacobian = csr_matrix((data, (rows, cols)), shape=(sz, sz))
 
     x = spsolve(jacobian, epsilon)
 

@@ -9,7 +9,7 @@ import pandas as pd
 from pandapipes import get_fluid
 from pandapipes.constants import NORMAL_PRESSURE, TEMP_GRADIENT_KPM, AVG_TEMPERATURE_K, \
     HEIGHT_EXPONENT
-from pandapipes.idx_branch import LOAD_VEC_NODES_FROM, LOAD_VEC_NODES_TO, FROM_NODE, TO_NODE
+from pandapipes.idx_branch import FROM_NODE, TO_NODE
 from pandapipes.idx_node import (EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T,
                                  PINIT, NODE_TYPE, P, TINIT, NODE_TYPE_T, T, LOAD)
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
@@ -142,55 +142,15 @@ def set_entry_check_repeat(pit, column, entry, repeat_number, repeated=True):
     pit[:, column] = np.repeat(entry, repeat_number) if repeated else entry
 
 
-def set_fixed_node_entries(net, node_pit, junctions, types, values, node_comp, mode):
-    if not len(junctions):
-        return [], []
-
-    junction_idx_lookups = get_lookup(net, "node", "index")[node_comp.table_name()]
-    use_numba = get_net_option(net, "use_numba")
-
-    if mode == "p":
-        val_col, type_col, count_col, typ, valid_types, values = \
-            PINIT, NODE_TYPE, EXT_GRID_OCCURENCE, P, ["p", "pt"], values
-    elif mode == "t":
-        val_col, type_col, count_col, typ, valid_types, values = \
-            TINIT, NODE_TYPE_T, EXT_GRID_OCCURENCE_T, T, ["t", "pt"], values
-    else:
-        raise UserWarning(r'The mode %s is not supported. Choose either mode "p" or "t"' % mode)
-
-    mask = np.isin(types, valid_types)
-
-    juncts, val_sum, number = _sum_by_group(use_numba, junctions[mask], values[mask],
-                                            np.ones_like(values[mask], dtype=np.int32))
-
-    index = junction_idx_lookups[juncts]
-
-    node_pit[index, val_col] = (node_pit[index, val_col] * node_pit[index, count_col] + val_sum) / \
-                               (number + node_pit[index, count_col])
-
-    node_pit[index, count_col] += number
-    node_pit[index, type_col] = typ
-
-    return index
-
-
-def get_mass_flow_at_nodes(net, node_pit, branch_pit, eg_nodes, comp):
-    node_uni, inverse_nodes, counts = np.unique(eg_nodes, return_counts=True, return_inverse=True)
-    eg_from_branches = np.isin(branch_pit[:, FROM_NODE], node_uni)
-    eg_to_branches = np.isin(branch_pit[:, TO_NODE], node_uni)
-    from_nodes = branch_pit[eg_from_branches, FROM_NODE]
-    to_nodes = branch_pit[eg_to_branches, TO_NODE]
-    mass_flow_from = branch_pit[eg_from_branches, LOAD_VEC_NODES_FROM]
-    mass_flow_to = branch_pit[eg_to_branches, LOAD_VEC_NODES_TO]
-    loads = node_pit[node_uni, LOAD]
-    all_index_nodes = np.concatenate([from_nodes, to_nodes, node_uni])
-    all_mass_flows = np.concatenate([-mass_flow_from, mass_flow_to, -loads])
-    nodes, sum_mass_flows = _sum_by_group(get_net_option(net, "use_numba"), all_index_nodes,
-                                          all_mass_flows)
-    if not np.all(nodes == node_uni):
-        raise UserWarning("In component %s: Something went wrong with the mass flow balance. "
-                          "Please report this error at github." % comp.__name__)
-    return sum_mass_flows, inverse_nodes, counts
+def build_pit_entries(rows: np.ndarray, cols: list, data: list) -> tuple:
+    n = len(rows)
+    all_rows = np.tile(rows, len(cols))
+    all_cols = np.concatenate([np.full(n, c, dtype=np.int32) for c in cols])
+    all_data = np.concatenate([
+        np.full(n, d, dtype=np.float64) if np.isscalar(d) else np.asarray(d, dtype=np.float64)
+        for d in data
+    ])
+    return all_rows, all_cols, all_data
 
 
 def standard_branch_wo_internals_result_lookup(net):

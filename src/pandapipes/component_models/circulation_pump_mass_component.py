@@ -2,12 +2,17 @@
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
 from numpy import dtype
 
 from pandapipes.component_models.abstract_models.circulation_pump import CirculationPump
+from pandapipes.component_models.component_toolbox import build_pit_entries
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import JAC_DERIV_DP, JAC_DERIV_DP1, JAC_DERIV_DM, MDOTINIT, \
-    LOAD_VEC_BRANCHES
+from pandapipes.idx_branch import MDOTINIT
+from pandapipes.pf.derivative_calculation import calculate_derivatives_branch_thermal
+from pandapipes.pf.internals_toolbox import get_to_nodes_corrected
+from pandapipes.pf.pipeflow_setup import get_lookup, get_net_option
+from pandapipes.pf.system_index import ComponentEquations, EqWriteMode, PitEntries, HydVarEq, ThermVarEq
 
 try:
     import pandaplan.core.pplog as logging
@@ -22,6 +27,14 @@ class CirculationPumpMass(CirculationPump):
     @classmethod
     def table_name(cls):
         return "circ_pump_mass"
+
+    @classmethod
+    def active_identifier(cls):
+        return "in_service"
+
+    @classmethod
+    def get_connected_node_type(cls):
+        return Junction
 
     @classmethod
     def get_component_input(cls):
@@ -40,31 +53,76 @@ class CirculationPumpMass(CirculationPump):
                 ("type", dtype(object))]
 
     @classmethod
-    def get_connected_node_type(cls):
-        return Junction
+    def register_pit_branch_entries(cls, net, branch_pit, node_pit, registry) -> None:
+        super().register_pit_branch_entries(net, branch_pit, node_pit, registry)
+
+        f, t = get_lookup(net, "branch", "from_to")[cls.table_name()]
+        tbl = net[cls.table_name()]
+        if not len(tbl):
+            return
+
+        rows = np.arange(f, t, dtype=np.int32)
+        registry.add(PitEntries(*build_pit_entries(
+            rows, [MDOTINIT], [tbl.mdot_flow_kg_per_s.values],
+        )))
 
     @classmethod
-    def active_identifier(cls):
-        return "in_service"
+    def register_hydraulic_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
+        cls._register_node_continuity(net, branch_pit, node_pit, sys_idx, registry)
+
+        f, t = get_lookup(net, "branch", "from_to_active_hydraulics")[cls.table_name()]
+        if f == t:
+            return
+
+        branch_idx = np.arange(f, t, dtype=np.int32)
+        mdot_col = sys_idx.idx(HydVarEq.MDOTINIT, branch_idx)
+        branch_eq = sys_idx.idx(HydVarEq.BRANCH, branch_idx)
+
+        # Branch equation: 1 * δm = 0  (mass flow is fixed, no change)
+        registry.add_override(ComponentEquations(
+            rows=branch_eq.astype(np.int32),
+            cols=mdot_col.astype(np.int32),
+            data=np.ones(len(branch_idx), dtype=np.float64),
+            load_rows=branch_eq.astype(np.int32),
+            load_data=np.zeros(len(branch_idx), dtype=np.float64),
+            mode=EqWriteMode.UNIQUE,
+        ))
 
     @classmethod
-    def create_pit_branch_entries(cls, net, branch_pit):
-        circ_pump_pit = super().create_pit_branch_entries(net, branch_pit)
-        circ_pump_pit[:, MDOTINIT] = net[cls.table_name()].mdot_flow_kg_per_s.values
+    def register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
+        f, t = get_lookup(net, "branch", "from_to_active_heat_transfer")[cls.table_name()]
+        if f == t:
+            return
 
-    @classmethod
-    def adaption_after_derivatives_hydraulic(cls, net,
-                                             branch_pit, node_pit,
-                                             branch_pit_old, node_pit_old,
-                                             idx_lookups, options):
-        # set all pressure derivatives to 0 and velocity to 1; load vector must be 0, as no change
-        # of velocity is allowed during the pipeflow iteration
-        circ_pump_pit = super().adaption_after_derivatives_hydraulic(net,
-                                                                     branch_pit, node_pit,
-                                                                     branch_pit_old, node_pit_old,
-                                                                     idx_lookups, options)
-        circ_pump_pit[:, JAC_DERIV_DP] = 0
-        circ_pump_pit[:, JAC_DERIV_DP1] = 0
-        circ_pump_pit[:, JAC_DERIV_DM] = 1
-        circ_pump_pit[:, LOAD_VEC_BRANCHES] = 0
+        branch_idx = np.arange(f, t, dtype=np.int32)
+        options = {"use_numba": get_net_option(net, "use_numba")}
+        branch_pit_old = net["_active_old_pit"]["branch"]
+        fnt, dfnt_dt, dfnt_dtout, _, _, _ = calculate_derivatives_branch_thermal(
+            net, branch_pit[f:t], node_pit, branch_pit_old[f:t], options
+        )
 
+        b_pit = branch_pit[f:t]
+        tn = get_to_nodes_corrected(b_pit).astype(np.int32)
+
+        t_out_col = sys_idx.idx(ThermVarEq.TOUTINIT, branch_idx)
+        tn_eq     = sys_idx.idx(ThermVarEq.NODE, tn)
+        branch_eq = sys_idx.idx(ThermVarEq.BRANCH, branch_idx)
+
+        # Outlet temperature fixed at t_flow_k
+        registry.add_override(ComponentEquations(
+            rows=branch_eq.astype(np.int32),
+            cols=branch_eq.astype(np.int32),
+            data=np.ones(len(branch_idx), dtype=np.float64),
+            load_rows=branch_eq.astype(np.int32),
+            load_data=np.zeros(len(branch_idx), dtype=np.float64),
+            mode=EqWriteMode.UNIQUE,
+        ))
+
+        # Node energy balance at the receiving (to) node
+        rows_node = np.concatenate([tn_eq, tn_eq])
+        cols_node = np.concatenate([tn_eq, t_out_col])
+        data_node = np.concatenate([dfnt_dt, dfnt_dtout])
+        registry.add(ComponentEquations(
+            rows_node.astype(np.int32), cols_node.astype(np.int32), data_node.astype(np.float64),
+            tn_eq.astype(np.int32), fnt.astype(np.float64),
+        ))

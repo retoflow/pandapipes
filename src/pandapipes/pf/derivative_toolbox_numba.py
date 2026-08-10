@@ -157,7 +157,7 @@ def derivatives_thermal_numba(node_pit, branch_pit,
 
         if ~transient and ~nodes_flow[i]:
             fn[i] = amb - t_init_n[i]
-            dfn_dt[i] = 1.
+            dfn_dt[i] = -1.
 
     for i in range(b):
         # this is not required currently, but useful when implementing leakages
@@ -199,7 +199,7 @@ def derivatives_thermal_numba(node_pit, branch_pit,
                 fn_eq = (rho[i] * area * cp_b[i] * (1 / dt) * (t_init_i[i] - t_from_node_vor_zero)
                          - alpha * (t_amb - t_init_i[i]))
                 fn_deriv = rho[i] * area * cp_b[i] * (1 / dt) + alpha
-                dfn_dt[from_nodes[i]] -= fn_deriv
+                dfn_dt[from_nodes[i]] += fn_deriv
                 fn[from_nodes[i]] += fn_eq
             if tn_zero:
                 t_to_node_vor_zero = node_pit_old[to_nodes[i], node_pit_old_lookup[TINIT_NODE]]
@@ -207,7 +207,7 @@ def derivatives_thermal_numba(node_pit, branch_pit,
                 tn_eq = (rho[i] * area * cp_b[i] * (1 / dt) * (t_to_node - t_to_node_vor_zero)
                          - alpha * (t_amb - t_to_node))
                 tn_deriv = (rho[i]* area * cp_b[i] * (1 / dt) + alpha)
-                dfn_dt[to_nodes[i]] -= tn_deriv
+                dfn_dt[to_nodes[i]] += tn_deriv
                 fn[to_nodes[i]] += tn_eq
         else:
             if branches_flow[i]:
@@ -224,6 +224,140 @@ def derivatives_thermal_numba(node_pit, branch_pit,
             infeed[from_nodes[i]] = ~result_from
 
     return fn, dfn_dt, fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout, infeed
+
+
+@jit((float64[:, :],
+      float64[:, :], int32[:],
+      float64[:], float64[:], float64[:],
+      float64[:], float64[:],
+      float64[:], optional(float64), bool, float64), nopython=True, cache=False)
+def derivatives_branch_thermal_numba(branch_pit,
+                                      branch_pit_old, branch_pit_old_lookup,
+                                      t_init_i, t_init_i1, t_init_nt,
+                                      cp_n, cp_b,
+                                      rho, dt, transient, amb):
+    b = t_init_nt.shape[0]
+
+    fnt = np.zeros_like(t_init_nt)
+    dfnt_dt = np.zeros_like(t_init_nt)
+    dfnt_dtout = np.zeros_like(t_init_nt)
+    fb = np.zeros_like(t_init_nt)
+    dfb_dt = np.zeros_like(t_init_nt)
+    dfb_dtout = np.zeros_like(t_init_nt)
+
+    branches_flow = np.zeros(b, dtype=bool)
+    for i in range(b):
+        mdot_val = branch_pit[i, MDOTINIT]
+        branches_flow[i] = (not np.isnan(mdot_val)) and (abs(mdot_val) > 1e-10)
+
+    for i in range(b):
+        mdot = np.abs(branch_pit[i][MDOTINIT])
+        t_amb = branch_pit[i][TEXT]
+        length = branch_pit[i][LENGTH]
+        alpha = branch_pit[i][ALPHA] * np.pi * branch_pit[i][DO]
+        tl = branch_pit[i][TL]
+        qext = branch_pit[i][QEXT]
+
+        fnt[i] = cp_n[i] * mdot * (t_init_i1[i] - t_init_nt[i])
+        dfnt_dt[i] = -cp_n[i] * mdot
+        dfnt_dtout[i] = cp_n[i] * mdot
+
+        if transient:
+            area = branch_pit[i][AREA]
+            tvor = branch_pit_old[i][branch_pit_old_lookup[TOUTINIT]]
+
+            fb[i] = (
+                rho[i] * area * cp_b[i] * (t_init_i1[i] - tvor) * (1 / dt) * length
+                + cp_b[i] * mdot * (-t_init_i[i] + t_init_i1[i] - tl)
+                - alpha * (t_amb - t_init_i1[i]) * length + qext
+            )
+            dfb_dt[i] = -cp_b[i] * mdot
+            dfb_dtout[i] = rho[i] * area * cp_b[i] / dt * length + cp_b[i] * mdot + alpha * length
+
+            if not branches_flow[i] and abs(branch_pit[i][LENGTH]) < 1e-8:
+                fb[i] = (rho[i] * area * cp_b[i] * (t_init_i1[i] - tvor) * (1 / dt)
+                         - alpha * (t_amb - t_init_i1[i]) + qext)
+                dfb_dt[i] = 0
+                dfb_dtout[i] = rho[i] * area * cp_b[i] / dt + alpha
+        else:
+            if branches_flow[i]:
+                fb[i] = (
+                    t_amb + (t_init_i[i] - t_amb) * np.exp(-alpha * length / (cp_b[i] * mdot))
+                    - t_init_i1[i] + tl - qext / (cp_b[i] * mdot)
+                )
+                dfb_dt[i] = np.exp(-alpha * length / (cp_b[i] * mdot))
+            else:
+                fb[i] = amb - t_init_i1[i]
+                fnt[i] = 0.
+                dfnt_dt[i] = 0.
+                dfnt_dtout[i] = 0.
+            dfb_dtout[i] = -1.
+
+    return fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout
+
+
+@jit((float64[:, :], float64[:, :],
+      float64[:, :], int32[:],
+      int32[:], int32[:],
+      float64[:], float64[:],
+      float64[:], float64[:],
+      optional(float64), bool, float64), nopython=True, cache=False)
+def derivatives_node_thermal_numba(node_pit, branch_pit,
+                                    node_pit_old, node_pit_old_lookup,
+                                    from_nodes, to_nodes,
+                                    t_init_i, t_init_n,
+                                    cp_b, rho,
+                                    dt, transient, amb):
+    n = t_init_n.shape[0]
+    b = from_nodes.shape[0]
+
+    fn = np.zeros_like(t_init_n)
+    dfn_dt = np.zeros_like(t_init_n)
+
+    if b == 0:
+        if not transient:
+            for i in range(n):
+                fn[i] = amb - t_init_n[i]
+                dfn_dt[i] = -1.
+        return fn, dfn_dt
+
+    club_to, club_from, branches_flow = _make_lookups(branch_pit, to_nodes, from_nodes)
+    nodes_flow = np.zeros(n, dtype=bool)
+    for i in range(n):
+        result_from = club_from[i] if (i < len(club_from)) else False
+        result_to = club_to[i] if (i < len(club_to)) else False
+        nodes_flow[i] = result_from | result_to
+
+        if not transient and not nodes_flow[i]:
+            fn[i] = amb - t_init_n[i]
+            dfn_dt[i] = -1.
+
+    if transient:
+        for i in range(b):
+            area = branch_pit[i][AREA]
+            t_amb = branch_pit[i][TEXT]
+            alpha = branch_pit[i][ALPHA] * np.pi * branch_pit[i][DO]
+
+            fn_zero = not nodes_flow[from_nodes[i]]
+            tn_zero = not nodes_flow[to_nodes[i]]
+
+            if fn_zero:
+                t_from_vor = node_pit_old[from_nodes[i], node_pit_old_lookup[TINIT_NODE]]
+                fn_eq = (rho[i] * area * cp_b[i] * (1 / dt) * (t_init_i[i] - t_from_vor)
+                         - alpha * (t_amb - t_init_i[i]))
+                fn_deriv = rho[i] * area * cp_b[i] * (1 / dt) + alpha
+                dfn_dt[from_nodes[i]] += fn_deriv
+                fn[from_nodes[i]] += fn_eq
+            if tn_zero:
+                t_to_vor = node_pit_old[to_nodes[i], node_pit_old_lookup[TINIT_NODE]]
+                t_to = node_pit[to_nodes[i], TINIT_NODE]
+                tn_eq = (rho[i] * area * cp_b[i] * (1 / dt) * (t_to - t_to_vor)
+                         - alpha * (t_amb - t_to))
+                tn_deriv = rho[i] * area * cp_b[i] * (1 / dt) + alpha
+                dfn_dt[to_nodes[i]] += tn_deriv
+                fn[to_nodes[i]] += tn_eq
+
+    return fn, dfn_dt
 
 
 @jit((float64[:], float64[:], float64[:], float64[:], float64[:]), nopython=True)

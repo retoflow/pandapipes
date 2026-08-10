@@ -6,9 +6,11 @@ import numpy as np
 from numpy import dtype
 
 from pandapipes.component_models.abstract_models.node_element_models import NodeElementComponent
-from pandapipes.component_models.component_toolbox import set_fixed_node_entries
+from pandapipes.component_models.component_toolbox import build_pit_entries
 from pandapipes.pf.pipeflow_setup import get_lookup
-from pandapipes.idx_node import MDOTSLACKINIT, VAR_MASS_SLACK, JAC_DERIV_MSL
+from pandapipes.idx_node import (NODE_TYPE, P, PINIT, TINIT, MDOTSLACKINIT, INFEED,
+                                  EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T, NODE_TYPE_T, T)
+from pandapipes.pf.system_index import ComponentEquations, EqWriteMode, PitEntries, PitWriteMode, HydVarEq, ThermVarEq
 
 try:
     import pandaplan.core.pplog as logging
@@ -28,8 +30,12 @@ class ExtGrid(NodeElementComponent):
         return "ext_grid"
 
     @classmethod
+    def active_identifier(cls):
+        return "in_service"
+
+    @classmethod
     def sign(cls):
-        return 1.
+        return -1.
 
     @classmethod
     def get_connected_node_type(cls):
@@ -37,33 +43,145 @@ class ExtGrid(NodeElementComponent):
         return Junction
 
     @classmethod
-    def active_identifier(cls):
-        return "in_service"
+    def get_connected_junction(cls, net):
+        junction = net[cls.table_name()].junction
+        return junction
 
     @classmethod
-    def create_pit_node_entries(cls, net, node_pit):
-        """
-        Function which creates pit node entries.
+    def get_node_col(cls):
+        return "junction"
 
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :param node_pit:
-        :type node_pit:
-        :return: No Output.
+    @classmethod
+    def get_component_input(cls):
         """
+
+        :return:
+        :rtype:
+        """
+        return [("name", dtype(object)),
+                ("junction", "u4"),
+                ("p_bar", "f8"),
+                ("t_k", "f8"),
+                ("in_service", "bool"),
+                ('type', dtype(object))]
+
+    @classmethod
+    def register_pit_node_entries(cls, net, node_pit, registry) -> None:
         ext_grids = net[cls.table_name()]
         ext_grids = ext_grids[ext_grids[cls.active_identifier()].values]
+        if not len(ext_grids):
+            return
 
         junction = ext_grids[cls.get_node_col()].values
         types = ext_grids.type.values
-        p_values = ext_grids.p_bar.values
-        t_values = ext_grids.t_k.values
-        index_p = set_fixed_node_entries(
-            net, node_pit, junction, types, p_values, cls.get_connected_node_type(), 'p')
-        set_fixed_node_entries(net, node_pit, junction, types, t_values, cls.get_connected_node_type(), 't')
-        node_pit[index_p, JAC_DERIV_MSL] = -1.
-        node_pit[index_p, VAR_MASS_SLACK] = True
-        return ext_grids, p_values
+        junction_lookup = get_lookup(net, "node", "index")[cls.get_connected_node_type().table_name()]
+        mask_p = np.isin(types, ["p", "pt"])
+        mask_t = np.isin(types, ["t", "pt"])
+        index_p = junction_lookup[junction[mask_p]]
+        index_t = junction_lookup[junction[mask_t]]
+
+        registry.add_override(PitEntries(*build_pit_entries(
+            index_p,
+            [PINIT, NODE_TYPE],
+            [ext_grids.p_bar.values[mask_p], float(P)],
+        ), mode=PitWriteMode.MEAN))
+        registry.add_override(PitEntries(*build_pit_entries(
+            index_t,
+            [TINIT, NODE_TYPE_T],
+            [ext_grids.t_k.values[mask_t], float(T)],
+        ), mode=PitWriteMode.MEAN))
+        registry.add_override(PitEntries(*build_pit_entries(
+            index_p,
+            [EXT_GRID_OCCURENCE],
+            [1.]),
+            mode=PitWriteMode.ADDITIVE))
+        registry.add_override(PitEntries(*build_pit_entries(
+            index_t,
+            [EXT_GRID_OCCURENCE_T],
+            [1.]),
+            mode=PitWriteMode.ADDITIVE))
+
+    @classmethod
+    def register_hydraulic_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
+        slack_nodes = sys_idx.slack_nodes  # all P-type node_pit rows, sorted
+        if not len(slack_nodes):
+            return
+
+        ranks = np.arange(len(slack_nodes), dtype=np.int32)
+
+        p_col     = sys_idx.idx(HydVarEq.PINIT,         slack_nodes)
+        slack_col = sys_idx.idx(HydVarEq.MDOTSLACKINIT, ranks)
+        n_eq      = sys_idx.idx(HydVarEq.NODE,           slack_nodes)
+        slack_eq  = sys_idx.idx(HydVarEq.SLACK,          ranks)
+
+        # SLACK equation (override): pressure fix — δPINIT = 0
+        registry.add(ComponentEquations(
+            rows=slack_eq.astype(np.int32),
+            cols=p_col.astype(np.int32),
+            data=np.ones(len(slack_eq), dtype=np.float64),
+            load_rows=slack_eq.astype(np.int32),
+            load_data=np.zeros(len(slack_eq), dtype=np.float64),
+            mode=EqWriteMode.UNIQUE,
+        ))
+
+        # NODE equation: MDOTSLACKINIT participates in mass balance
+        registry.add(ComponentEquations(
+            rows=n_eq.astype(np.int32),
+            cols=slack_col.astype(np.int32),
+            data=np.ones(len(n_eq), dtype=np.float64),
+            load_rows=n_eq.astype(np.int32),
+            load_data=node_pit[slack_nodes, MDOTSLACKINIT].astype(np.float64),
+        ))
+
+    @classmethod
+    def register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
+        ext_grids = net[cls.table_name()]
+        ext_grids = ext_grids[ext_grids[cls.active_identifier()].values]
+        if not len(ext_grids):
+            return
+
+        junction = ext_grids[cls.get_node_col()].values
+        types = ext_grids.type.values
+        mask_t = np.isin(types, ["t", "pt"])
+
+        junction_lookup = get_lookup(net, "node", "index_active_heat_transfer")[
+            cls.get_connected_node_type().table_name()
+        ]
+        ext_nodes = junction_lookup[junction[mask_t].astype(np.int32)]
+        ext_nodes = ext_nodes[ext_nodes != -1]  # drop disconnected, sort to match infeed_nodes order
+
+        if not len(ext_nodes):
+            return
+
+        infeed_mask = node_pit[:, INFEED].astype(bool)
+        infeed_nodes = np.where(infeed_mask)[0].astype(np.int32)
+
+        if not len(infeed_nodes):
+            return
+
+        t_col = sys_idx.idx(ThermVarEq.TINIT, ext_nodes)
+        n_eq  = sys_idx.idx(ThermVarEq.NODE, infeed_nodes)
+
+        registry.add_override(ComponentEquations(
+            rows=n_eq.astype(np.int32),
+            cols=t_col.astype(np.int32),
+            data=np.ones(len(n_eq), dtype=np.float64),
+            load_rows=n_eq.astype(np.int32),
+            load_data=np.zeros(len(n_eq), dtype=np.float64),
+            mode=EqWriteMode.MEAN,
+        ))
+
+    @classmethod
+    def get_result_table(cls, net):
+        """
+
+        :param net: The pandapipes network
+        :type net: pandapipesNet
+        :return: (columns, all_float) - the column names and whether they are all float type. Only
+                if False, returns columns as tuples also specifying the dtypes
+        :rtype: (list, bool)
+        """
+        return ["mdot_kg_per_s"], True
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
@@ -103,38 +221,3 @@ class ExtGrid(NodeElementComponent):
         res_table["mdot_kg_per_s"].values[p_grids] = \
             cls.sign() * (sum_mass_flows / counts)[inverse_nodes]
         return res_table, ext_grids, node_pit, branch_pit
-
-    @classmethod
-    def get_connected_junction(cls, net):
-        junction = net[cls.table_name()].junction
-        return junction
-
-    @classmethod
-    def get_node_col(cls):
-        return "junction"
-
-    @classmethod
-    def get_component_input(cls):
-        """
-
-        :return:
-        :rtype:
-        """
-        return [("name", dtype(object)),
-                ("junction", "u4"),
-                ("p_bar", "f8"),
-                ("t_k", "f8"),
-                ("in_service", "bool"),
-                ('type', dtype(object))]
-
-    @classmethod
-    def get_result_table(cls, net):
-        """
-
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :return: (columns, all_float) - the column names and whether they are all float type. Only
-                if False, returns columns as tuples also specifying the dtypes
-        :rtype: (list, bool)
-        """
-        return ["mdot_kg_per_s"], True

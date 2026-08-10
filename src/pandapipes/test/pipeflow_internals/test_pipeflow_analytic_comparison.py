@@ -78,7 +78,7 @@ def test_gas_internal_nodes(use_numba):
             density=0.82752,
         ),
     )
-    max_iter_hyd = 6 if use_numba else 6
+    max_iter_hyd = 7 if use_numba else 7
     pandapipes.pipeflow(
         net,
         max_iter_hyd=max_iter_hyd,

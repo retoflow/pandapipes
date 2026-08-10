@@ -561,7 +561,7 @@ def test_mixed_indexing_oos3(create_mixed_indexing_grid, use_numba):
     net.pipe.at[7, "in_service"] = False
     oos_juncs = [6, 15]
 
-    max_iter_hyd = 3 if use_numba else 3
+    max_iter_hyd = 4 if use_numba else 4
     with pytest.raises(PipeflowNotConverged):
         pandapipes.pipeflow(net, max_iter_hyd=max_iter_hyd,
                             mode="hydraulics", use_numba=use_numba, check_connectivity=False)
@@ -582,7 +582,7 @@ def test_mixed_indexing_oos4(create_mixed_indexing_grid, use_numba):
     net.valve.at[2, "opened"] = False
     oos_juncs = [15]
 
-    max_iter_hyd = 3 if use_numba else 3
+    max_iter_hyd = 4 if use_numba else 4
     with pytest.raises(PipeflowNotConverged):
         pandapipes.pipeflow(net, max_iter_hyd=max_iter_hyd,
                             mode="hydraulics", use_numba=use_numba, check_connectivity=False)
@@ -603,7 +603,7 @@ def test_mixed_indexing_oos5(create_mixed_indexing_grid, use_numba):
     net.pipe.at[6, "in_service"] = False
     oos_juncs = [9, 8, 7]
 
-    max_iter_hyd = 3 if use_numba else 3
+    max_iter_hyd = 4 if use_numba else 4
     with pytest.raises(PipeflowNotConverged):
         pandapipes.pipeflow(net, max_iter_hyd=max_iter_hyd,
                             mode="hydraulics", use_numba=use_numba, check_connectivity=False)

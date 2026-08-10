@@ -15,13 +15,13 @@ class Source(ConstFlow):
         return "source"
 
     @classmethod
+    def active_identifier(cls):
+        return "in_service"
+
+    @classmethod
     def sign(cls):
         return -1
 
     @classmethod
     def get_connected_node_type(cls):
         return Junction
-
-    @classmethod
-    def active_identifier(cls):
-        return "in_service"

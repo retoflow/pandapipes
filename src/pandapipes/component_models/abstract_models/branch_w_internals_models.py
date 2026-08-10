@@ -6,17 +6,17 @@ import numpy as np
 import pandas as pd
 
 from pandapipes.component_models.abstract_models.branch_models import BranchComponent
-from pandapipes.component_models.component_toolbox import set_entry_check_repeat, get_internal_lookup_structure
+from pandapipes.component_models.component_toolbox import get_internal_lookup_structure, build_pit_entries
 from pandapipes.idx_branch import (
     ACTIVE,
     ELEMENT_IDX,
     D,
     DO,
     LOSS_COEFFICIENT as LC,
-    AREA,
     QEXT,
+    TABLE_IDX as BRANCH_TABLE_IDX,
 )
-from pandapipes.idx_node import L, node_cols
+from pandapipes.idx_node import L, NODE_TYPE, TABLE_IDX as NODE_TABLE_IDX
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_lookup, get_table_number, get_net_option
 
 try:
@@ -37,19 +37,11 @@ class BranchWInternalsComponent(BranchComponent):
         raise NotImplementedError
 
     @classmethod
-    def get_component_input(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def get_result_table(cls, net):
-        raise NotImplementedError
-
-    @classmethod
     def active_identifier(cls):
         raise NotImplementedError
 
     @classmethod
-    def calculate_temperature_lift(cls, net, branch_component_pit, node_pit):
+    def get_connected_node_type(cls):
         raise NotImplementedError
 
     @classmethod
@@ -66,16 +58,16 @@ class BranchWInternalsComponent(BranchComponent):
         raise NotImplementedError
 
     @classmethod
-    def get_connected_node_type(cls):
-        raise NotImplementedError
-
-    @classmethod
     def get_internal_node_number(cls, net, return_internal_only=True):
         raise NotImplementedError
 
     @classmethod
     def get_internal_branch_number(cls, net):
         return NotImplementedError
+
+    @classmethod
+    def get_component_input(cls):
+        raise NotImplementedError
 
     @classmethod
     def create_node_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start, current_table, internals):
@@ -147,71 +139,65 @@ class BranchWInternalsComponent(BranchComponent):
         return end, current_table + 1
 
     @classmethod
-    def create_pit_node_entries(cls, net, node_pit):
-        """
-        Function which creates pit node entries.
-
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :param node_pit:
-        :type node_pit:
-        :return: No Output.
-        """
+    def register_pit_node_entries(cls, net, node_pit, registry) -> None:
+        from pandapipes.pf.system_index import PitEntries
         table_lookup = get_lookup(net, "node", "table")
         table_nr = get_table_number(table_lookup, cls.internal_node_name())
-        if table_nr is not None:
-            ft_lookup = get_lookup(net, "node", "from_to")
-            f, t = ft_lookup[cls.internal_node_name()]
-
-            int_node_pit = node_pit[f:t, :]
-            if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
-                int_node_pit[:, :] = np.array([table_nr, 0, L] + [0] * (node_cols - 3))
-            return int_node_pit
+        if table_nr is None:
+            return
+        ft_lookup = get_lookup(net, "node", "from_to")
+        f, t = ft_lookup[cls.internal_node_name()]
+        if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
+            rows = np.arange(f, t, dtype=np.int32)
+            registry.add(PitEntries(*build_pit_entries(
+                rows,
+                [NODE_TABLE_IDX, NODE_TYPE],
+                [float(table_nr), float(L)],
+            )))
 
     @classmethod
-    def create_pit_branch_entries(cls, net, branch_pit):
-        """
-        Function which creates pit branch entries.
+    def register_pit_branch_entries(cls, net, branch_pit, node_pit, registry) -> None:
+        from pandapipes.pf.system_index import PitEntries
+        super().register_pit_branch_entries(net, branch_pit, node_pit, registry)
 
-        :param net: The pandapipes network
-        :type net: pandapipesNet
-        :param branch_pit:
-        :type branch_pit:
-        :return: No Output.
-        """
-        branch_w_internals_pit, node_pit = super().create_pit_branch_entries(net, branch_pit)
-
-        if not len(branch_w_internals_pit):
-            return branch_w_internals_pit, node_pit
+        f, t = get_lookup(net, "branch", "from_to")[cls.table_name()]
+        if not len(net[cls.table_name()]):
+            return
 
         tbl = cls.table_name()
         node_ft_lookups = get_lookup(net, "node", "from_to")
         has_internals = cls.internal_node_name() in node_ft_lookups
         internal_branch_number = cls.get_internal_branch_number(net)
+        rows = np.arange(f, t, dtype=np.int32)
+
         if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
-            set_entry_check_repeat(branch_w_internals_pit, ELEMENT_IDX, net[tbl].index.values, internal_branch_number,
-                has_internals)
-            set_entry_check_repeat(branch_w_internals_pit, ACTIVE, net[tbl][cls.active_identifier()].values,
-                internal_branch_number, has_internals)
-            set_entry_check_repeat(branch_w_internals_pit, D, net[tbl].inner_diameter_mm.values / 1000., internal_branch_number,
-                has_internals)
+            def _rep(vals):
+                return np.repeat(vals, internal_branch_number) if has_internals else vals
+
+            d_vals = _rep(net[tbl].inner_diameter_mm.values / 1000.)
+            lc_vals = _rep(net[tbl].loss_coefficient.values)
+            elem_idx_vals = _rep(net[tbl].index.values.astype(float))
+            active_vals = _rep(net[tbl][cls.active_identifier()].values.astype(float))
+
             if "outer_diameter_mm" in net[tbl]:
-                outer = net[tbl].outer_diameter_mm.values
+                outer = net[tbl].outer_diameter_mm.values.copy()
                 inner = net[tbl].inner_diameter_mm.values
                 outer[pd.isnull(outer)] = inner[pd.isnull(outer)]
-                set_entry_check_repeat(branch_w_internals_pit, DO, outer / 1000., internal_branch_number,
-                    has_internals)
-                branch_w_internals_pit[np.isnan(branch_w_internals_pit[:, DO]), DO] = (
-                    branch_w_internals_pit)[np.isnan(branch_w_internals_pit[:, DO]), D]
+                do_vals = _rep(outer / 1000.)
+                do_vals[np.isnan(do_vals)] = d_vals[np.isnan(do_vals)]
             else:
-                set_entry_check_repeat(branch_w_internals_pit, DO, net[tbl].inner_diameter_mm.values / 1000., internal_branch_number,
-                    has_internals)
-            set_entry_check_repeat(branch_w_internals_pit, LC, net[tbl].loss_coefficient.values, internal_branch_number,
-                has_internals)
+                do_vals = d_vals.copy()
 
-            branch_w_internals_pit[:, AREA] = branch_w_internals_pit[:, D] ** 2 * np.pi / 4
-            branch_w_internals_pit[:, QEXT] = 0.0
-        return branch_w_internals_pit, node_pit
+            n = len(rows)
+            registry.add(PitEntries(*build_pit_entries(
+                rows,
+                [ELEMENT_IDX, ACTIVE, D, DO, LC, QEXT],
+                [elem_idx_vals, active_vals, d_vals, do_vals, lc_vals, np.zeros(n)],
+            )))
+
+    @classmethod
+    def calculate_temperature_lift(cls, net, branch_component_pit, node_pit):
+        raise NotImplementedError
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
@@ -228,4 +214,8 @@ class BranchWInternalsComponent(BranchComponent):
         :return:
         :rtype:
         """
+        raise NotImplementedError
+
+    @classmethod
+    def get_result_table(cls, net):
         raise NotImplementedError

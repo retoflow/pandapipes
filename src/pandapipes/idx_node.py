@@ -16,20 +16,15 @@ NODE_TYPE = 2  # junction type
 NODE_TYPE_T = 3
 ACTIVE = 4
 HEIGHT = 5
-PAMB = 6 # Ambient pressure in [bar]
+PAMB = 6  # Ambient pressure in [bar]
 LOAD = 7
 LOAD_T = 8  # Heat power drawn in [W]
 EXT_GRID_OCCURENCE = 9
 EXT_GRID_OCCURENCE_T = 10
 INFEED = 11
-VAR_MASS_SLACK = 12 #required as slack do not necesseraly allow mass different from zero
 
-PINIT = 13
+PINIT = 12
+TINIT = 13
 MDOTSLACKINIT = 14
-TINIT = 15
 
-JAC_DERIV_MSL = 16
-
-JAC_DERIV_DT_N = 17
-
-node_cols = 18
+node_cols = 15

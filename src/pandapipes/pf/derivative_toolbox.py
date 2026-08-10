@@ -81,16 +81,12 @@ def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_i
 
     return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
 
-def derivatives_thermal_np(node_pit, branch_pit,
-                           node_pit_old, node_pit_old_lookup,
-                           branch_pit_old, branch_pit_old_lookup,
-                           from_nodes, to_nodes,
-                           t_init_i, t_init_i1, t_init_nt, t_init_n,
-                           cp_n, cp_b,
-                           rho, dt, transient, amb):
-    # this is not required currently, but useful when implementing leakages
-    # m_init_i = np.abs(branch_pit[:, MDOTINIT])
-    # m_init_i1 = np.abs(branch_pit[:, MDOTINIT])
+def derivatives_branch_thermal_np(branch_pit,
+                                   branch_pit_old, branch_pit_old_lookup,
+                                   t_init_i, t_init_i1, t_init_nt,
+                                   cp_n, cp_b,
+                                   rho, dt, transient, amb):
+    """Branch-level thermal derivatives: fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout."""
     mdot = np.abs(branch_pit[:, MDOTINIT])
     t_amb = branch_pit[:, TEXT]
     length = branch_pit[:, LENGTH]
@@ -99,12 +95,6 @@ def derivatives_thermal_np(node_pit, branch_pit,
     qext = branch_pit[:, QEXT]
 
     branches_flow = _branches_not_zero_flow(branch_pit)
-    # ToDo: Is it relevant to consider slack streams?
-    nodes_flow = np.isin(np.arange(len(node_pit)),
-                         np.concatenate([from_nodes[branches_flow], to_nodes[branches_flow]]))
-
-    fn = np.zeros_like(t_init_n)
-    dfn_dt = np.zeros_like(t_init_n)
 
     fnt = cp_n * mdot * (t_init_i1 - t_init_nt)
     dfnt_dt = - cp_n * mdot
@@ -134,7 +124,54 @@ def derivatives_thermal_np(node_pit, branch_pit,
                 )
                 dfb_dt[mask] = 0
                 dfb_dtout[mask] = (rho[mask] * area[mask] * cp_b[mask] / dt +
-                                                     alpha[mask])
+                                   alpha[mask])
+    else:
+        non_zero_length_mask = ~np.isclose(branch_pit[:, LENGTH], 0, rtol=1e-6, atol=1e-10)
+        if np.any(non_zero_length_mask & (np.abs(branch_pit[:, QEXT]) > 1e-12)):
+            logger.warning(
+                "A branch with non zero length has a non zero external heat load. This might lead "
+                "to errors in the calculation, as the overlap of temperature reduction from heat "
+                "losses to ambient and a constant heat flux cannot be solved with the implmented "
+                "method."
+            )
+
+        fb = np.zeros_like(cp_b)
+        fb[branches_flow] = (
+                t_amb[branches_flow] + (t_init_i[branches_flow] - t_amb[branches_flow])
+                * np.exp(- alpha[branches_flow] * length[branches_flow] / (cp_b[branches_flow] * mdot[branches_flow]))
+                - t_init_i1[branches_flow] + tl[branches_flow]
+                - qext[branches_flow] / (cp_b[branches_flow] * mdot[branches_flow])
+        )
+        fb[~branches_flow] = amb - t_init_i1[~branches_flow]
+        dfb_dt = np.zeros_like(cp_b)
+        dfb_dt[branches_flow] = np.exp(- alpha[branches_flow] * length[branches_flow] /
+                                       (cp_b[branches_flow] * mdot[branches_flow]))
+        dfb_dtout = - np.ones_like(cp_b)
+
+        fnt[~branches_flow] = 0
+        dfnt_dt[~branches_flow] = 0
+        dfnt_dtout[~branches_flow] = 0
+
+    return fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout
+
+
+def derivatives_node_thermal_np(node_pit, branch_pit,
+                                 node_pit_old, node_pit_old_lookup,
+                                 from_nodes, to_nodes,
+                                 t_init_i, t_init_n,
+                                 cp_b, rho, dt, transient, amb):
+    """Node stagnant thermal derivatives: fn, dfn_dt. Must be called with the full branch pit."""
+    branches_flow = _branches_not_zero_flow(branch_pit)
+    nodes_flow = np.isin(np.arange(len(node_pit)),
+                         np.concatenate([from_nodes[branches_flow], to_nodes[branches_flow]]))
+
+    fn = np.zeros_like(t_init_n)
+    dfn_dt = np.zeros_like(t_init_n)
+
+    if transient:
+        area = branch_pit[:, AREA]
+        alpha = branch_pit[:, ALPHA] * np.pi * branch_pit[:, DO]
+        t_amb = branch_pit[:, TEXT]
 
         if np.any(~nodes_flow):
             fn_zero = ~nodes_flow[from_nodes]
@@ -155,52 +192,18 @@ def derivatives_thermal_np(node_pit, branch_pit,
             fn_deriv = (rho[fn_zero] * area[fn_zero] * cp_b[fn_zero] * (1 / dt) + alpha[fn_zero])
             tn_deriv = (rho[tn_zero] * area[tn_zero] * cp_b[tn_zero] * (1 / dt) + alpha[tn_zero])
 
-            fn_nodes, fn_eq_sum, fn_deriv_sum = _sum_by_group(False,
-                from_nodes[fn_zero], fn_eq, fn_deriv
-            )
+            fn_nodes, fn_eq_sum, fn_deriv_sum = _sum_by_group(False, from_nodes[fn_zero], fn_eq, fn_deriv)
+            tn_nodes, tn_eq_sum, tn_deriv_sum = _sum_by_group(False, to_nodes[tn_zero], tn_eq, tn_deriv)
 
-            tn_nodes, tn_eq_sum, tn_deriv_sum = _sum_by_group(False,
-                to_nodes[tn_zero], tn_eq, tn_deriv
-            )
-
-            fn[~nodes_flow] = 0
             fn[fn_nodes] += fn_eq_sum
             fn[tn_nodes] += tn_eq_sum
-            dfn_dt[~nodes_flow] = 0
-            dfn_dt[fn_nodes] -= fn_deriv_sum
-            dfn_dt[tn_nodes] -= tn_deriv_sum
+            dfn_dt[fn_nodes] += fn_deriv_sum
+            dfn_dt[tn_nodes] += tn_deriv_sum
     else:
-        non_zero_length_mask = ~np.isclose(branch_pit[:, LENGTH], 0, rtol=1e-6, atol=1e-10)
-        if np.any(non_zero_length_mask & (np.abs(branch_pit[:, QEXT]) > 1e-12)):
-            logger.warning(
-                "A branch with non zero length has a non zero external heat load. This might lead "
-                "to errors in the calculation, as the overlap of temperature reduction from heat "
-                "losses to ambient and a constant heat flux cannot be solved with the implmented "
-                "method."
-            )
-
-        fb = np.zeros_like(cp_b)
-        fb[branches_flow] = (
-                t_amb[branches_flow] + (t_init_i[branches_flow]  - t_amb[branches_flow])
-                * np.exp(- alpha[branches_flow] * length[branches_flow]  / (cp_b[branches_flow] * mdot[branches_flow]))
-                - t_init_i1[branches_flow] + tl[branches_flow]
-                - qext[branches_flow] / (cp_b[branches_flow] * mdot[branches_flow])
-        )
-        fb[~branches_flow] = amb - t_init_i1[~branches_flow]
-        dfb_dt = np.zeros_like(cp_b)
-        dfb_dt[branches_flow] = np.exp(- alpha[branches_flow] * length[branches_flow] /
-                                       (cp_b[branches_flow] * mdot[branches_flow]))
-        dfb_dtout = - np.ones_like(cp_b)
-
         fn[~nodes_flow] = amb - t_init_n[~nodes_flow]
-        dfn_dt[~nodes_flow] = np.ones(np.sum(~nodes_flow))
-        fnt[~branches_flow] = 0
-        dfnt_dt[~branches_flow] = 0
-        dfnt_dtout[~branches_flow] = 0
+        dfn_dt[~nodes_flow] = - np.ones(np.sum(~nodes_flow))
 
-    infeed = np.setdiff1d(from_nodes[branches_flow], to_nodes[branches_flow])
-
-    return fn, dfn_dt, fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout, infeed
+    return fn, dfn_dt
 
 
 def calc_lambda_nikuradse_incomp_np(m, d, k, eta, area):
