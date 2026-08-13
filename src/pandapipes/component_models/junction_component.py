@@ -198,12 +198,5 @@ class Junction(NodeComponent):
                                  'as pressure is negative at nodes %s'
                                  % junction_pit[junction_pit[:, IdxNode.PINIT] < 0, IdxNode.ELEMENT_IDX]))
 
-        #     res_table["p_bar"].values[junctions_connected_hydraulic] = junction_pit[:, PINIT]
-        #     if mode == "hydraulics":
-        #         res_table["t_k"].values[junctions_connected_hydraulic] = junction_pit[:, TINIT]
-        #
-        # if mode in ["heat", "sequential", "bidirectional]:
-        #     junctions_connected_ht = get_lookup(net, "node", "active_heat_transfer")[f:t]
-        #     res_table["t_k"].values[junctions_connected_ht] = junction_pit[:, TINIT]
         res_table["p_bar"].values[:] = junction_pit[:, IdxNode.PINIT]
         res_table["t_k"].values[:] = junction_pit[:, IdxNode.TINIT]

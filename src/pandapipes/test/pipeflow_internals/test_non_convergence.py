@@ -7,7 +7,7 @@ import pytest
 
 import pandapipes
 from pandapipes.networks.simple_gas_networks import gas_versatility
-from pandapipes.pipeflow import PipeflowNotConverged
+from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
 from pandapipes.properties.fluids import FluidPropertyConstant
 
 

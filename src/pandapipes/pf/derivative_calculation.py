@@ -215,7 +215,7 @@ def calc_lambda(m, eta, d, k, gas_mode, friction_model, lengths, options, area):
 
     if friction_model == "colebrook":
         # TODO: move this import to top level if possible
-        from pandapipes.pipeflow import PipeflowNotConverged
+        from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
         max_iter = options.get("max_iter_colebrook", 100)
         tolerance = options.get("tolerance_colebrook", 1e-4)
         converged, lambda_colebrook = colebrook_white(re, d, k, lambda_nikuradse, max_iter, lengths, tolerance)

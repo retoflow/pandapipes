@@ -103,13 +103,9 @@ def test_heat_only(use_numba):
     pandapipes.pipeflow(ntw, max_iter_hyd=max_iter_hyd, stop_condition="tol", friction_model="nikuradse",
                         nonlinear_method="automatic", mode="hydraulics", use_numba=use_numba)
 
-    p = ntw._pit["node"][:, IdxNode.PINIT]
-    m = ntw._pit["branch"][:, IdxBranch.MDOTINIT]
-    u = np.concatenate((p, m))
-
     max_iter_therm = 4 if use_numba else 4
     pandapipes.pipeflow(ntw, max_iter_therm=max_iter_therm,
-                        sol_vec=u, stop_condition="tol", friction_model="nikuradse",
+                        stop_condition="tol", friction_model="nikuradse",
                         nonlinear_method="automatic", mode="heat", use_numba=use_numba)
 
     temp_net = net.res_junction.t_k

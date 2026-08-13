@@ -3,11 +3,20 @@
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
+from scipy.sparse import csr_matrix
+from scipy.sparse.linalg import spsolve
 
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
+from pandapipes.pf.system_index import HydraulicSystemIndex, HeatSystemIndex, ComponentRegistry
 from pandapipes.pf.pipeflow_setup import (
-    get_net_option, get_net_options, set_net_option, create_internal_results, write_internal_results
+    get_net_options, get_net_option, get_lookup, reduce_pit, set_user_pf_options, create_internal_results,
+    identify_active_nodes_branches, hydraulic_slack_mask, heat_transfer_slack_mask, set_net_option,
+    check_infeed_number, compute_infeed_nodes, write_internal_results, PipeflowNotConverged
 )
-
+from pandapipes.pf.result_extraction import (
+    extract_results_active_pit_hydraulics, extract_results_active_pit_heat_transfer
+)
 try:
     import pandaplan.core.pplog as logging
 except ImportError:
@@ -30,12 +39,12 @@ class Calculation:
 
     Class attributes to set on subclasses
     --------------------------------------
-    MODE : str        identifies this calculation in logs/internal results (e.g. "hydraulics")
-    ITER : str        net option name holding the max-iteration count (e.g. "max_iter_hyd")
-    VARS : list[str]  names of the variables tracked for convergence (e.g. ["mdot", "p"])
-    TOLS : list[str]  net option names holding the tolerance for each VARS entry
-    PITS : list[str]  which pit ("branch"/"node") each VARS entry lives in
-    COLS : list[int]  PIT column index for each VARS entry (used for damping-fallback writes)
+    MODE             : str        identifies this calculation in logs/internal results (e.g. "hydraulics")
+    ITER             : str        net option name holding the max-iteration count (e.g. "max_iter_hyd")
+    VARS             : list[str]  names of the variables tracked for convergence (e.g. ["mdot", "p"])
+    TOLS             : list[str]  net option names holding the tolerance for each VARS entry
+    PITS             : list[str]  which pit ("branch"/"node") each VARS entry lives in
+    COLS             : list[int]  PIT column index for each VARS entry (used for damping-fallback writes)
     """
 
     MODE = None
@@ -44,6 +53,31 @@ class Calculation:
     TOLS = []
     PITS = []
     COLS = []
+
+    def handle_non_convergence(self):
+        raise PipeflowNotConverged("The calculation did not converge to a solution.")
+
+    def prepare(self, net):
+        """
+        One-time setup run before the Newton-Raphson loop starts (e.g. connectivity
+        identification, pit reduction). Default: no-op.
+        """
+        pass
+
+    def on_converged(self, net):
+        """Hook run once, immediately after a successful Newton-Raphson solve. Default: no-op."""
+        pass
+
+    def rerun(self, net):
+        """
+        Hook run after a successful solve to let components request a full rerun (e.g. a
+        pressure control adjusting its target). Default: no-op.
+        """
+        pass
+
+    def extract_results(self, net):
+        """Write the converged results from "_active_pit" back into the general pit structure."""
+        raise NotImplementedError
 
     def solve_step(self, net):
         """
@@ -63,6 +97,8 @@ class Calculation:
 
     def run(self, net):
         """Run the Newton-Raphson loop until convergence or ITER's max iterations."""
+        net.converged = False
+        self.prepare(net)
         max_iter, nonlinear_method, tol_res = get_net_options(
             net, self.ITER, "nonlinear_method", "tol_res"
         )
@@ -140,6 +176,229 @@ class Calculation:
                 logger.debug("tolerance for %s: %s" % (var, tol))
 
 
+class HydraulicCalculation(Calculation):
+    """Newton-Raphson solve for pressure/mdot (see :func:`solve_hydraulics`)."""
+    MODE = 'hydraulics'
+    ITER = 'max_iter_hyd'
+    VARS = ['mdot', 'p', 'mdotslack']
+    TOLS = ['tol_m', 'tol_p', 'tol_m']
+    PITS = ['branch', 'node', 'node']
+    COLS = [IdxBranch.MDOTINIT, IdxNode.PINIT, IdxNode.MDOTSLACKINIT]
+
+    def handle_non_convergence(self):
+        raise PipeflowNotConverged("The hydraulic calculation did not converge to a solution.")
+
+    def prepare(self, net):
+        net["_lookups"]["node_active_hydraulics"], net["_lookups"]["branch_active_hydraulics"] = \
+            identify_active_nodes_branches(net, hydraulic_slack_mask(net))
+        reduce_pit(net, "hydraulics")
+
+    def solve_step(self, net):
+        return solve_hydraulics(net)
+
+    def on_converged(self, net):
+        set_user_pf_options(net, hyd_flag=True)
+
+    def rerun(self, net):
+        rerun = False
+        options = net["_options"]
+        branch_pit = net["_active_pit"]["branch"]
+        node_pit = net["_active_pit"]["node"]
+        branch_lookups = get_lookup(net, "branch", "from_to_active_hydraulics")
+        for comp in net['component_list']:
+            rerun |= comp.rerun_hydraulics(net, branch_pit, node_pit, branch_lookups, options)
+        if rerun:
+            extract_results_active_pit_hydraulics(net)
+            execute_hydraulics(net)
+
+    def extract_results(self, net):
+        extract_results_active_pit_hydraulics(net)
+
+
+class ThermalCalculation(Calculation):
+    """Newton-Raphson solve for branch outlet / node temperature (see :func:`solve_temperature`)."""
+    MODE = 'heat'
+    ITER = 'max_iter_therm'
+    VARS = ['Tout', 'T']
+    TOLS = ['tol_T', 'tol_T']
+    PITS = ['branch', 'node']
+    COLS = [IdxBranch.TOUTINIT, IdxNode.TINIT]
+
+    def handle_non_convergence(self):
+        raise PipeflowNotConverged("The heat transfer calculation did not converge to a solution.")
+
+    def prepare(self, net):
+        # heat transfer only makes physical sense on branches that are also hydraulically active
+        # (a temperature slack always needs a reachable pressure slack to actually move the fluid) -
+        # narrow down the hydraulic connectivity further via the heat-transfer slacks. If hydraulics
+        # hasn't run yet in this pipeflow() call (standalone mode='heat'), compute it once here.
+        if "node_active_hydraulics" not in net["_lookups"]:
+            net["_lookups"]["node_active_hydraulics"], net["_lookups"]["branch_active_hydraulics"] = \
+                identify_active_nodes_branches(net, hydraulic_slack_mask(net))
+        nodes_hyd = net["_lookups"]["node_active_hydraulics"]
+        branches_hyd = net["_lookups"]["branch_active_hydraulics"]
+
+        net["_lookups"]["node_active_heat_transfer"], net["_lookups"]["branch_active_heat_transfer"] = \
+            identify_active_nodes_branches(net, heat_transfer_slack_mask(net), nodes_hyd, branches_hyd)
+        reduce_pit(net, "heat_transfer")
+
+    def solve_step(self, net):
+        return solve_temperature(net)
+
+    def rerun(self, net):
+        rerun = False
+        options = net["_options"]
+        branch_pit = net["_active_pit"]["branch"]
+        node_pit = net["_active_pit"]["node"]
+        branch_lookups = get_lookup(net, "branch", "from_to_active_heat_transfer")
+        for comp in net['component_list']:
+            rerun |= comp.rerun_hydraulics(net, branch_pit, node_pit, branch_lookups, options)
+        if rerun:
+            extract_results_active_pit_heat_transfer(net)
+            execute_heat(net)
+
+    def extract_results(self, net):
+        extract_results_active_pit_heat_transfer(net)
+
+
+class BidirectionalCalculation(Calculation):
+    """Newton-Raphson solve alternating hydraulics and heat transfer (see :func:`solve_bidirectional`)."""
+    MODE = 'bidirectional'
+    ITER = 'max_iter_bidirect'
+    VARS = ['mdot', 'p', 'TOUT', 'T']
+    TOLS = ['tol_m', 'tol_p', 'tol_T', 'tol_T']
+    PITS = ['branch', 'node', 'branch', 'node']
+    COLS = [IdxBranch.MDOTINIT, IdxNode.PINIT, IdxBranch.TOUTINIT, IdxNode.TINIT]
+
+    def handle_non_convergence(self):
+        raise PipeflowNotConverged("The bidrectional calculation did not converge to a solution.")
+
+    def prepare(self, net):
+        # hydraulics and heat transfer each get their own, independent connectivity check, done
+        # once here rather than (for heat) recomputed on every solve_bidirectional() iteration
+        net["_lookups"]["node_active_hydraulics"], net["_lookups"]["branch_active_hydraulics"] = \
+            identify_active_nodes_branches(net, hydraulic_slack_mask(net))
+        net["_lookups"]["node_active_heat_transfer"], net["_lookups"]["branch_active_heat_transfer"] = \
+            identify_active_nodes_branches(net, heat_transfer_slack_mask(net))
+
+    def solve_step(self, net):
+        return solve_bidirectional(net)
+
+    def extract_results(self, net):
+        pass  # solve_bidirectional() already extracts both results every iteration
+
+def solve_bidirectional(net):
+    reduce_pit(net, "hydraulics")
+    res_hyd, residual_hyd, filter_hyd = solve_hydraulics(net)
+    extract_results_active_pit_hydraulics(net)
+
+    reduce_pit(net, "heat_transfer")
+    res_heat, residual_heat, filter_heat = solve_temperature(net)
+    extract_results_active_pit_heat_transfer(net)
+
+    residual = np.concatenate([residual_hyd, residual_heat])
+    res = res_hyd + res_heat
+    filtered = filter_hyd + filter_heat
+    return res, residual, filtered
+
+def solve_hydraulics(net):
+    """
+    Create and solve the linearized system of equations (based on a jacobian in form of a scipy
+    sparse matrix and a load vector in form of a numpy array) in order to calculate the hydraulic
+    magnitudes (pressure and velocity) for the network nodes and branches.
+
+    :param net: The pandapipesNet for which to solve the hydraulic matrix
+    :type net: pandapipesNet
+    :return:
+
+    """
+    options = net["_options"]
+
+    connected_restarted = True
+    while connected_restarted:
+        branch_pit = net["_active_pit"]["branch"]
+        node_pit = net["_active_pit"]["node"]
+        connected_restarted = _restart_connectivity_check(net)
+
+    sys_idx = HydraulicSystemIndex(node_pit, branch_pit)
+    eq_registry = ComponentRegistry()
+
+    for comp in net['component_list']:
+        comp.register_hydraulic_equations(net, branch_pit, node_pit, sys_idx, eq_registry)
+
+    sz = sys_idx.size()
+    rows, cols, data, epsilon = eq_registry.assemble(sz)
+    jacobian = csr_matrix((data, (rows, cols)), shape=(sz, sz))
+
+    m_init_old = branch_pit[:, IdxBranch.MDOTINIT].copy()
+    p_init_old = node_pit[:, IdxNode.PINIT].copy()
+    slack_nodes = np.where(node_pit[:, IdxNode.NODE_TYPE] == IdxNode.P)[0]
+    msl_init_old = node_pit[slack_nodes, IdxNode.MDOTSLACKINIT].copy()
+
+    x = spsolve(jacobian, epsilon)
+
+    branch_pit[:, IdxBranch.MDOTINIT] -= x[len(node_pit):len(node_pit) + len(branch_pit)] * options["alpha"]
+    node_pit[:, IdxNode.PINIT] -= x[:len(node_pit)] * options["alpha"]
+    node_pit[slack_nodes, IdxNode.MDOTSLACKINIT] -= x[len(node_pit) + len(branch_pit):]
+
+    filtered = [None, None, slack_nodes]
+
+    return [branch_pit[:, IdxBranch.MDOTINIT], m_init_old, node_pit[:, IdxNode.PINIT], p_init_old,
+            node_pit[slack_nodes, IdxNode.MDOTSLACKINIT], msl_init_old], epsilon, filtered
+
+def solve_temperature(net):
+    """
+    This function contains the procedure to build and solve a linearized system of equation based on
+    an underlying net and the necessary graph data structures. Temperature values are calculated.
+    Returned are the solution vectors for the new iteration, the original solution vectors and a
+    vector containing component indices for the system matrix entries
+
+    :param net: The pandapipesNet for which to solve the temperature matrix
+    :type net: pandapipesNet
+    :return: branch_pit
+
+    """
+
+    options = net["_options"]
+    branch_pit = net["_active_pit"]["branch"]
+    node_pit = net["_active_pit"]["node"]
+
+    # Negative velocity values are turned to positive ones (including exchange of from_node and
+    # to_node for temperature calculation
+    branch_pit[:, IdxBranch.FROM_NODE_T_SWITCHED] = branch_pit[:, IdxBranch.MDOTINIT] < -2e-11
+
+    node_pit[:, IdxNode.INFEED] = False
+    compute_infeed_nodes(branch_pit, node_pit)
+
+    sys_idx = HeatSystemIndex(node_pit, branch_pit)
+    eq_registry = ComponentRegistry()
+
+    for comp in net['component_list']:
+        comp.register_thermal_equations(net, branch_pit, node_pit, sys_idx, eq_registry)
+
+    t_init_old = node_pit[:, IdxNode.TINIT].copy()
+    t_out_old = branch_pit[:, IdxBranch.TOUTINIT].copy()
+    filtered = [None, None]
+    if not check_infeed_number(node_pit):
+        return [branch_pit[:, IdxBranch.TOUTINIT], t_out_old, node_pit[:, IdxNode.TINIT], t_init_old], np.array([
+            np.nan]), filtered
+
+    sz = sys_idx.size()
+    rows, cols, data, epsilon = eq_registry.assemble(sz)
+    jacobian = csr_matrix((data, (rows, cols)), shape=(sz, sz))
+
+    x = spsolve(jacobian, epsilon)
+
+    if np.any(np.isnan(x)):
+        return [branch_pit[:, IdxBranch.TOUTINIT], t_out_old, node_pit[:, IdxNode.TINIT], t_init_old], np.array([
+            np.nan]), filtered
+
+    node_pit[:, IdxNode.TINIT] -= x[:len(node_pit)] * options["alpha"]
+    branch_pit[:, IdxBranch.TOUTINIT] -= x[len(node_pit):] * options["alpha"]
+
+    return [branch_pit[:, IdxBranch.TOUTINIT], t_out_old, node_pit[:, IdxNode.TINIT], t_init_old], epsilon, filtered
+
+
 def set_damping_factor(net, niter, errors):
     """
     Set the value of the damping factor (factor for the newton step width) from current results.
@@ -163,3 +422,26 @@ def set_damping_factor(net, niter, errors):
     else:
         set_net_option(net, "alpha", current_alpha * 10 if current_alpha <= 0.1 else 1.0)
     return error_increased
+
+
+def _restart_connectivity_check(net):
+    nodes_connected = get_lookup(net, "node", "active_hydraulics")
+    branches_connected = get_lookup(net, "branch", "active_hydraulics")
+    rows_nodes = np.arange(net["_pit"]["node"].shape[0])[nodes_connected]
+    rows_branches = np.arange(net["_pit"]["branch"].shape[0])[branches_connected]
+    active_node_pit = net["_active_pit"]["node"]
+    active_branch_pit = net["_active_pit"]["branch"]
+    node_pit = net["_pit"]["node"][rows_nodes, IdxNode.ACTIVE]
+    branch_pit = net["_pit"]["branch"][rows_branches, IdxBranch.ACTIVE]
+    mask_diff_node = active_node_pit[:, IdxNode.ACTIVE] != node_pit
+    mask_diff_branch = active_branch_pit[:, IdxBranch.ACTIVE]  != branch_pit
+    if np.any(mask_diff_node) | np.any(mask_diff_branch):
+        net["_pit"]["node"][rows_nodes, IdxNode.ACTIVE] = active_node_pit[:, IdxNode.ACTIVE]
+        net["_pit"]["node"][rows_nodes, IdxNode.NODE_TYPE] = active_node_pit[:, IdxNode.NODE_TYPE]
+        net["_pit"]["branch"][rows_branches, IdxBranch.ACTIVE] = active_branch_pit[:, IdxBranch.ACTIVE]
+        net["_pit"]["branch"][rows_branches, IdxBranch.BRANCH_TYPE] = active_branch_pit[:, IdxBranch.BRANCH_TYPE]
+        net["_lookups"]["node_active_hydraulics"], net["_lookups"]["branch_active_hydraulics"] = \
+            identify_active_nodes_branches(net, hydraulic_slack_mask(net))
+        reduce_pit(net, "hydraulics")
+        return True
+    return False

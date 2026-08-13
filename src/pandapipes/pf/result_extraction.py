@@ -14,7 +14,7 @@ except ImportError:
     from pandapower.pf.no_numba import jit
 
 
-def extract_all_results(net, calculation_mode):
+def extract_all_results(net):
     """
     Extract results from branch pit and node pit and write them to the different tables of the net,\
     as defined by the component models.
@@ -26,6 +26,7 @@ def extract_all_results(net, calculation_mode):
     :return: No output
 
     """
+    calculation_mode = get_net_option(net, "mode")
     branch_pit = net["_pit"]["branch"]
     node_pit = net["_pit"]["node"]
     branch_results = get_basic_branch_results(net, branch_pit, node_pit)
@@ -291,39 +292,60 @@ def extract_branch_results_without_internals(net, branch_results, required_resul
                 branch_results[entry][f:t][comp_connected_ht]
 
 
-def extract_results_active_pit(net, mode="hydraulics"):
+def extract_results_active_pit_hydraulics(net):
     """
-    Extract the pipeflow results from the internal pit structure ("_active_pit") to the general pit
-    structure.
+    Extract the hydraulic pipeflow results from the internal pit structure ("_active_pit") to the
+    general pit structure.
 
     :param net: The pandapipes net that the internal structure belongs to
     :type net: pandapipesNet
-    :param mode: defines whether results from hydraulic or temperature calculation are transferred
-    :type mode: str, default "hydraulics"
     :return: No output
-
     """
-    nodes_connected = get_lookup(net, "node", "active_" + mode)
-    branches_connected = get_lookup(net, "branch", "active_" + mode)
-    result_node_col = IdxNode.PINIT if mode == "hydraulics" else IdxNode.TINIT
-    not_affected_node_col = IdxNode.TINIT if mode == "hydraulics" else IdxNode.PINIT
+    nodes_connected = get_lookup(net, "node", "active_hydraulics")
+    branches_connected = get_lookup(net, "branch", "active_hydraulics")
     copied_node_cols = np.array([i for i in range(net["_pit"]["node"].shape[1])
-                                 if i not in [not_affected_node_col]])
+                                 if i not in [IdxNode.TINIT]])
     rows_nodes = np.arange(net["_pit"]["node"].shape[0])[nodes_connected]
 
-    result_branch_col = IdxBranch.MDOTINIT if mode == "hydraulics" else IdxBranch.TOUTINIT
-    not_affected_branch_col = IdxBranch.TOUTINIT if mode == "hydraulics" else IdxBranch.MDOTINIT
     copied_branch_cols = np.array([i for i in range(net["_pit"]["branch"].shape[1])
                                    if i not in [IdxBranch.FROM_NODE, IdxBranch.TO_NODE,
-                                                not_affected_branch_col]])
+                                                IdxBranch.TOUTINIT]])
+    rows_branches = np.arange(net["_pit"]["branch"].shape[0])[branches_connected]
+
+    net["_pit"]["node"][~nodes_connected, IdxNode.PINIT] = np.nan
+    net["_pit"]["node"][rows_nodes[:, np.newaxis], copied_node_cols[np.newaxis, :]] = \
+        net["_active_pit"]["node"][:, copied_node_cols]
+    net["_pit"]["branch"][~branches_connected, IdxBranch.MDOTINIT] = np.nan
+    net["_pit"]["branch"][rows_branches[:, np.newaxis], copied_branch_cols[np.newaxis, :]] = \
+        net["_active_pit"]["branch"][:, copied_branch_cols]
+
+
+def extract_results_active_pit_heat_transfer(net):
+    """
+    Extract the heat transfer pipeflow results from the internal pit structure ("_active_pit") to
+    the general pit structure.
+
+    :param net: The pandapipes net that the internal structure belongs to
+    :type net: pandapipesNet
+    :return: No output
+    """
+    nodes_connected = get_lookup(net, "node", "active_heat_transfer")
+    branches_connected = get_lookup(net, "branch", "active_heat_transfer")
+    copied_node_cols = np.array([i for i in range(net["_pit"]["node"].shape[1])
+                                 if i not in [IdxNode.PINIT]])
+    rows_nodes = np.arange(net["_pit"]["node"].shape[0])[nodes_connected]
+
+    copied_branch_cols = np.array([i for i in range(net["_pit"]["branch"].shape[1])
+                                   if i not in [IdxBranch.FROM_NODE, IdxBranch.TO_NODE,
+                                                IdxBranch.MDOTINIT]])
     rows_branches = np.arange(net["_pit"]["branch"].shape[0])[branches_connected]
 
     amb = get_net_option(net, 'ambient_temperature')
 
-    net["_pit"]["node"][~nodes_connected, result_node_col] = np.nan if mode == "hydraulics" else amb
+    net["_pit"]["node"][~nodes_connected, IdxNode.TINIT] = amb
     net["_pit"]["node"][rows_nodes[:, np.newaxis], copied_node_cols[np.newaxis, :]] = \
         net["_active_pit"]["node"][:, copied_node_cols]
-    net["_pit"]["branch"][~branches_connected, result_branch_col] = np.nan if mode == "hydraulics" else \
+    net["_pit"]["branch"][~branches_connected, IdxBranch.TOUTINIT] = \
         net["_pit"]["branch"][~branches_connected, IdxBranch.TEXT]
     net["_pit"]["branch"][rows_branches[:, np.newaxis], copied_branch_cols[np.newaxis, :]] = \
         net["_active_pit"]["branch"][:, copied_branch_cols]
