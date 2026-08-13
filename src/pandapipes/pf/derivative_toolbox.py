@@ -15,7 +15,7 @@ from pandapipes.idx_node import HEIGHT, PINIT, PAMB, TINIT as TINIT_NODE
 logger = logging.getLogger(__name__)
 
 
-def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, der_lambda_d, p_init_i_abs, p_init_i1_abs,
+def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init_i1_abs,
                                     height_difference, rho):
     # Formulas for pressure loss in incompressible flow
     # Use medium density ((rho_from + rho_to) / 2) for Darcy Weisbach according to
