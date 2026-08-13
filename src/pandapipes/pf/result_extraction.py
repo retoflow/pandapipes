@@ -11,7 +11,7 @@ from pandapipes.idx_branch import (
     LAMBDA,
     PL,
     TOUTINIT,
-    AREA,
+    D,
     TEXT,
     LOSS_COEFFICIENT as LC,
     FROM_NODE_T_SWITCHED, DP_FRICT_LOSS,
@@ -75,7 +75,7 @@ def get_basic_branch_results(net, branch_pit, node_pit):
         vf = branch_pit[:, MDOTINIT] / fluid.get_density(NORMAL_TEMPERATURE)
     else:
         vf = branch_pit[:, MDOTINIT] / get_branch_real_density(fluid, node_pit, branch_pit)
-    v = vf / branch_pit[:, AREA]
+    v = vf / (np.pi * (branch_pit[:, D] / 2) ** 2)
     t_outlet = branch_pit[:, TOUTINIT]
     branch_results = {"v_mps": v, "mf_from": branch_pit[:, MDOTINIT], "mf_to": -branch_pit[:, MDOTINIT],
                       "vf": vf, "p_from": node_pit[from_nodes, PINIT], "p_to": node_pit[to_nodes, PINIT],

@@ -8,14 +8,14 @@ from numpy import linalg
 from pandapipes.pf.internals_toolbox import _sum_by_group
 from pandapipes.constants import P_CONVERSION, GRAVITATION_CONSTANT, NORMAL_PRESSURE, \
     NORMAL_TEMPERATURE
-from pandapipes.idx_branch import LENGTH, LAMBDA, D, LOSS_COEFFICIENT as LC, PL, AREA, \
+from pandapipes.idx_branch import LENGTH, LAMBDA, D, LOSS_COEFFICIENT as LC, PL, \
     MDOTINIT, TOUTINIT, FROM_NODE, TEXT, ALPHA, TL, QEXT, DO, DP_FRICT_LOSS
 from pandapipes.idx_node import HEIGHT, PINIT, PAMB, TINIT as TINIT_NODE
 
 logger = logging.getLogger(__name__)
 
 
-def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init_i1_abs,
+def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, der_lambda_d, p_init_i_abs, p_init_i1_abs,
                                     height_difference, rho):
     # Formulas for pressure loss in incompressible flow
     # Use medium density ((rho_from + rho_to) / 2) for Darcy Weisbach according to
@@ -24,14 +24,21 @@ def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init
     m_abs_deriv = np.maximum(m_init_abs, 1e-8)
     m_init2 = m_init_abs * branch_pit[:, MDOTINIT]
     p_diff = p_init_i_abs - p_init_i1_abs
+    l = branch_pit[:, LENGTH]
+    lambd = branch_pit[:, LAMBDA]
+    lc = branch_pit[:, LC]
+    pl = branch_pit[:, PL]
+
+    d = branch_pit[:, D]
+
     const_height = rho * GRAVITATION_CONSTANT * height_difference / P_CONVERSION
-    friction_term = np.divide(branch_pit[:, LENGTH] * branch_pit[:, LAMBDA], branch_pit[:, D]) + branch_pit[:, LC]
-    const_term = np.divide(1, branch_pit[:, AREA] ** 2 * rho * P_CONVERSION * 2)
+    friction_term = l * lambd / d + lc
+    const_term = 1 / ((np.pi * (d / 2) ** 2) ** 2 * rho * P_CONVERSION * 2)
 
     df_dm = - const_term * (2 * m_abs_deriv * friction_term + der_lambda
-                            * np.divide(branch_pit[:, LENGTH], branch_pit[:, D]) * m_init2)
+                            * l / d * m_init2)
 
-    load_vec = p_diff + branch_pit[:, PL] + const_height - const_term * m_init2 * friction_term
+    load_vec = p_diff + pl + const_height - const_term * m_init2 * friction_term
 
     df_dp = np.ones_like(der_lambda)
     df_dp1 = np.ones_like(der_lambda) * (-1)
@@ -59,7 +66,7 @@ def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_i
     tm = (node_pit[from_nodes, TINIT_NODE] + branch_pit[:, TOUTINIT]) / 2
     const_height = rho * GRAVITATION_CONSTANT * height_difference / P_CONVERSION
     friction_term = np.divide(lambda_ * branch_pit[:, LENGTH], branch_pit[:, D]) + branch_pit[:, LC]
-    normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n * branch_pit[:, AREA] ** 2)
+    normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n * (np.pi * (branch_pit[:, D] / 2) ** 2) ** 2)
 
     const_term_p = normal_term * m_init2 * friction_term * tm
     df_dp = 1. - const_term_p * p_sum_div * (der_comp - comp_fact * p_sum_div)
@@ -101,7 +108,7 @@ def derivatives_branch_thermal_np(branch_pit,
     dfnt_dtout = cp_n * mdot
 
     if transient:
-        area = branch_pit[:, AREA]
+        area = np.pi * (branch_pit[:, D] / 2) ** 2
         tvor = branch_pit_old[:, branch_pit_old_lookup[TOUTINIT]]
 
         fb = (
@@ -169,7 +176,7 @@ def derivatives_node_thermal_np(node_pit, branch_pit,
     dfn_dt = np.zeros_like(t_init_n)
 
     if transient:
-        area = branch_pit[:, AREA]
+        area = np.pi * (branch_pit[:, D] / 2) ** 2
         alpha = branch_pit[:, ALPHA] * np.pi * branch_pit[:, DO]
         t_amb = branch_pit[:, TEXT]
 
@@ -208,10 +215,10 @@ def derivatives_node_thermal_np(node_pit, branch_pit,
 
 def calc_lambda_nikuradse_incomp_np(m, d, k, eta, area):
     m_abs = np.abs(m)
-    re = np.divide(m_abs * d, eta * area)
+    re = m_abs * d / (eta * area)
     lambda_laminar = np.zeros_like(m)
     lambda_laminar[~np.isclose(re, 0)] = 64 / re[~np.isclose(re, 0)]
-    lambda_nikuradse = np.divide(1, (-2 * np.log10(k / (3.71 * d))) ** 2)
+    lambda_nikuradse = 1 / ((-2 * np.log10(k / (3.71 * d))) ** 2)
     return re, lambda_laminar, lambda_nikuradse
 
 

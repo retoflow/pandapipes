@@ -1,6 +1,6 @@
 import numpy as np
 from pandapipes.constants import NORMAL_TEMPERATURE
-from pandapipes.idx_branch import (LENGTH, D, K, RE, LAMBDA, FROM_NODE, TO_NODE, TOUTINIT, AREA,
+from pandapipes.idx_branch import (LENGTH, D, K, RE, LAMBDA, FROM_NODE, TO_NODE, TOUTINIT,
                                    MDOTINIT, DP_FRICT_LOSS)
 from pandapipes.idx_node import TINIT as TINIT_NODE
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected, _sum_by_group
@@ -49,10 +49,11 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
     rho = get_branch_real_density(fluid, node_pit, b_pit)
     eta = get_branch_real_eta(fluid, node_pit, b_pit, p_m)
 
+    area = np.pi * (b_pit[:, D] / 2) ** 2
     lambda_, re = calc_lambda(b_pit[:, MDOTINIT], eta, b_pit[:, D], b_pit[:, K], gas_mode,
-        friction_model, b_pit[:, LENGTH], options, b_pit[:, AREA])
+        friction_model, b_pit[:, LENGTH], options, area)
     der_lambda = calc_der_lambda(b_pit[:, MDOTINIT], eta, b_pit[:, D], b_pit[:, K], friction_model,
-                                 lambda_, b_pit[:, AREA], re, b_pit[:, LENGTH])
+                                 lambda_, area, re, b_pit[:, LENGTH])
     b_pit[:, RE]     = re
     b_pit[:, LAMBDA] = lambda_
 

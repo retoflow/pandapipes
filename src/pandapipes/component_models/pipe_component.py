@@ -10,9 +10,8 @@ from pandapipes.component_models.abstract_models import BranchWInternalsComponen
 from pandapipes.component_models.component_toolbox import build_pit_entries, vinterp, p_correction_height_air
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE
-from pandapipes.idx_branch import (FROM_NODE, TO_NODE, LENGTH, D, DO, AREA, K, MDOTINIT, ALPHA,
-                                   TEXT, TOUTINIT, RE, LAMBDA, LOSS_COEFFICIENT as LC,
-                                   DP_FRICT_LOSS, PL, TL, QEXT)
+from pandapipes.idx_branch import (FROM_NODE, TO_NODE, LENGTH, D, K, MDOTINIT, ALPHA,
+                                   TEXT, TOUTINIT)
 from pandapipes.idx_node import TINIT as TINIT_NODE, HEIGHT, PINIT, PAMB, ACTIVE as ACTIVE_ND
 from pandapipes.pf.derivative_calculation import calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal
 from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup, get_net_option, get_table_number
@@ -173,9 +172,9 @@ class Pipe(BranchWInternalsComponent):
 
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [FROM_NODE, TO_NODE, LENGTH, K, ALPHA, TEXT, AREA, TOUTINIT],
+                [FROM_NODE, TO_NODE, LENGTH, K, ALPHA, TEXT, TOUTINIT],
                 [from_nodes.astype(float), to_nodes.astype(float),
-                 length_vals, k_vals, alpha_vals, text_vals, area_vals, toutinit_vals],
+                 length_vals, k_vals, alpha_vals, text_vals, toutinit_vals],
             )))
         else:
             registry.add(PitEntries(*build_pit_entries(
@@ -397,7 +396,8 @@ class Pipe(BranchWInternalsComponent):
             m_nodes = int_v_lookup[pipe_lookup_index]
             m_nodes = [np.arange(x, y + 1) for x,y in zip(m_nodes[:, 0], m_nodes[:, 1])]
 
-            v_pipe_data = pipe_pit[m_nodes, MDOTINIT] / fluid.get_density(NORMAL_TEMPERATURE) / pipe_pit[m_nodes, AREA]
+            v_pipe_data = pipe_pit[m_nodes, MDOTINIT] / fluid.get_density(NORMAL_TEMPERATURE) / (
+                np.pi * (pipe_pit[m_nodes, D] / 2) ** 2)
             p_node_data = node_pit[p_nodes, PINIT]
             t_node_data = node_pit[p_nodes, TINIT_NODE]
 

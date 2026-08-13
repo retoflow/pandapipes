@@ -11,7 +11,7 @@ import pytest
 
 import pandapipes
 from pandapipes.constants import NORMAL_TEMPERATURE
-from pandapipes.idx_branch import MDOTINIT, AREA
+from pandapipes.idx_branch import MDOTINIT, D
 from pandapipes.idx_node import PINIT
 
 from pandapipes.properties import get_fluid
@@ -60,7 +60,7 @@ def test_hydraulic_only(simple_test_net, use_numba):
 
     p_pandapipes = node_pit[:, PINIT]
     fluid = get_fluid(net)
-    v_pandapipes = branch_pit[:, MDOTINIT] / branch_pit[:, AREA] / fluid.get_density(NORMAL_TEMPERATURE)
+    v_pandapipes = branch_pit[:, MDOTINIT] / (np.pi * (branch_pit[:, D] / 2) ** 2) / fluid.get_density(NORMAL_TEMPERATURE)
 
     p_diff = np.abs(1 - p_pandapipes / p_an)
     v_diff = np.abs(v_pandapipes - v_an)

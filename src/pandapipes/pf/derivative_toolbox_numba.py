@@ -3,7 +3,7 @@ from numpy import linalg
 
 from pandapipes.constants import P_CONVERSION, GRAVITATION_CONSTANT, NORMAL_PRESSURE, \
     NORMAL_TEMPERATURE
-from pandapipes.idx_branch import LENGTH, LAMBDA, D, LOSS_COEFFICIENT as LC, PL, AREA, \
+from pandapipes.idx_branch import LENGTH, LAMBDA, D, LOSS_COEFFICIENT as LC, PL, \
     MDOTINIT, FROM_NODE, TOUTINIT, TEXT, ALPHA, TL, QEXT, DO
 from pandapipes.idx_node import HEIGHT, PAMB, PINIT, TINIT as TINIT_NODE
 
@@ -37,7 +37,7 @@ def derivatives_hydraulic_incomp_numba(branch_pit, der_lambda, p_init_i_abs, p_i
         const_height = rho[i] * GRAVITATION_CONSTANT * height_difference[i] / P_CONVERSION
         friction_term = np.divide(branch_pit[i][LENGTH] * branch_pit[i][LAMBDA], branch_pit[i][D]) \
             + branch_pit[i][LC]
-        const_term = np.divide(1, branch_pit[i][AREA] ** 2 * rho[i] * P_CONVERSION * 2)
+        const_term = np.divide(1, (np.pi * (branch_pit[i][D] / 2) ** 2) ** 2 * rho[i] * P_CONVERSION * 2)
 
         df_dm[i] = -1. * const_term * (2 * m_abs_deriv * friction_term + der_lambda[i]
                                    * np.divide(branch_pit[i][LENGTH], branch_pit[i][D]) * m_init2)
@@ -81,7 +81,7 @@ def derivatives_hydraulic_comp_numba(node_pit, branch_pit, lambda_, der_lambda, 
         friction_term = np.divide(lambda_[i] * branch_pit[i][LENGTH], branch_pit[i][D]) + \
                         branch_pit[i][LC]
         normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n[i] *
-                                branch_pit[i][AREA] ** 2)
+                                (np.pi * (branch_pit[i][D] / 2) ** 2) ** 2)
 
         load_vec[i] = p_diff + branch_pit[i][PL] + const_height \
             - normal_term * comp_fact[i] * m_init2 * friction_term * p_sum_div * tm
@@ -175,7 +175,7 @@ def derivatives_thermal_numba(node_pit, branch_pit,
         dfnt_dtout[i] = cp_n[i] * mdot
 
         if transient:
-            area = branch_pit[i][AREA]
+            area = np.pi * (branch_pit[i][D] / 2) ** 2
             tvor = branch_pit_old[i][branch_pit_old_lookup[TOUTINIT]]
 
             fb[i] = (
@@ -263,7 +263,7 @@ def derivatives_branch_thermal_numba(branch_pit,
         dfnt_dtout[i] = cp_n[i] * mdot
 
         if transient:
-            area = branch_pit[i][AREA]
+            area = np.pi * (branch_pit[i][D] / 2) ** 2
             tvor = branch_pit_old[i][branch_pit_old_lookup[TOUTINIT]]
 
             fb[i] = (
@@ -334,7 +334,7 @@ def derivatives_node_thermal_numba(node_pit, branch_pit,
 
     if transient:
         for i in range(b):
-            area = branch_pit[i][AREA]
+            area = np.pi * (branch_pit[i][D] / 2) ** 2
             t_amb = branch_pit[i][TEXT]
             alpha = branch_pit[i][ALPHA] * np.pi * branch_pit[i][DO]
 

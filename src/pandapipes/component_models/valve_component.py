@@ -11,7 +11,7 @@ from pandapipes.component_models.component_toolbox import (
 )
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE
-from pandapipes.idx_branch import LENGTH, K, TEXT, ALPHA, FROM_NODE, TO_NODE, TOUTINIT, MDOTINIT, AREA
+from pandapipes.idx_branch import LENGTH, K, TEXT, ALPHA, FROM_NODE, TO_NODE, TOUTINIT, MDOTINIT
 from pandapipes.idx_node import TINIT as TINIT_NODE, HEIGHT, PINIT, ACTIVE as ACTIVE_ND, PAMB
 from pandapipes.pf.derivative_calculation import (
     calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal,
@@ -199,7 +199,7 @@ class Valve(BranchWInternalsComponent):
         d_vals = tbl.inner_diameter_mm.values / 1000.
         area_vals = d_vals ** 2 * np.pi / 4
         mdotinit_vals = 0.1 * area_vals * get_fluid(net).get_density(NORMAL_TEMPERATURE)
-        registry.add(PitEntries(*build_pit_entries(rows, [AREA, MDOTINIT], [area_vals, mdotinit_vals])))
+        registry.add(PitEntries(*build_pit_entries(rows, [MDOTINIT], [mdotinit_vals])))
 
     @classmethod
     def register_hydraulic_equations(cls, net, branch_pit, node_pit, sys_idx, registry) -> None:

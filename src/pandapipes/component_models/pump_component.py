@@ -18,7 +18,7 @@ from pandapipes.component_models.component_toolbox import (
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE, R_UNIVERSAL, P_CONVERSION
 from pandapipes.idx_branch import (
-    ELEMENT_IDX, FROM_NODE, TO_NODE, MDOTINIT, AREA, LOSS_COEFFICIENT as LC, PL,
+    ELEMENT_IDX, FROM_NODE, TO_NODE, MDOTINIT, D, PL,
 )
 from pandapipes.idx_node import PINIT, PAMB, TINIT as TINIT_NODE
 from pandapipes.pf.derivative_calculation import (
@@ -170,7 +170,8 @@ class Pump(BranchWOInternalsComponent):
 
         from_nodes = b_pit[:, FROM_NODE].astype(np.int32)
         fluid = get_fluid(net)
-        v_mps = b_pit[:, MDOTINIT] / b_pit[:, AREA] / fluid.get_density(NORMAL_TEMPERATURE)
+        area = np.pi * (b_pit[:, D] / 2) ** 2
+        v_mps = b_pit[:, MDOTINIT] / area / fluid.get_density(NORMAL_TEMPERATURE)
         if fluid.is_gas:
             p_from = node_pit[from_nodes, PAMB] + node_pit[from_nodes, PINIT]
             t_from = node_pit[from_nodes, TINIT_NODE]
@@ -181,7 +182,7 @@ class Pump(BranchWOInternalsComponent):
         else:
             v_from = v_mps
 
-        vol = v_from * b_pit[:, AREA]
+        vol = v_from * area
         if len(std_types):
             fcts = itemgetter(*std_types)(net['std_types']['pump'])
             fcts = [fcts] if not isinstance(fcts, tuple) else fcts

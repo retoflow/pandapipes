@@ -3,7 +3,7 @@
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, diags
 from scipy.sparse.linalg import spsolve
 
 from pandapipes.idx_branch import (MDOTINIT, TOUTINIT, FROM_NODE_T_SWITCHED, ACTIVE as ACTIVE_BRANCH,
@@ -274,7 +274,20 @@ def solve_hydraulics(net):
     slack_nodes = np.where(node_pit[:, NODE_TYPE] == P)[0]
     msl_init_old = node_pit[slack_nodes, MDOTSLACKINIT].copy()
 
-    x = spsolve(jacobian, epsilon)
+    # Diagonal (Jacobi) scaling: D-columns can be many orders of magnitude larger/smaller
+    # than mdot/p columns (terms scale like ~1/D**4..1/D**6), which makes spsolve badly
+    # over/under-correct D on the first step. Scale rows/cols by 1/sqrt(|diagonal|) so all
+    # variables are comparable before solving, then undo the scaling on the result - same
+    # solution, better-conditioned linear system.
+    diag = np.abs(jacobian.diagonal())
+    diag[diag < 1e-30] = 1.0
+    scale = 1.0 / np.sqrt(diag)
+    scale_mat = diags(scale)
+    jacobian_scaled = scale_mat @ jacobian @ scale_mat
+    epsilon_scaled = scale * epsilon
+
+    x_scaled = spsolve(jacobian_scaled, epsilon_scaled)
+    x = scale * x_scaled
 
     branch_pit[:, MDOTINIT] -= x[len(node_pit):len(node_pit) + len(branch_pit)] * options["alpha"]
     node_pit[:, PINIT] -= x[:len(node_pit)] * options["alpha"]

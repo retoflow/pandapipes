@@ -16,23 +16,22 @@ ACTIVE = 6
 LENGTH = 7  # Pipe length in [m]
 D = 8  # Diameter in [m]
 DO = 9 # Outer Diameter in [m]
-AREA = 10  # Area in [m²]
-K = 11  # Pipe roughness in [m]
-RE = 12 # Reynolds number
-LAMBDA = 13  # Lambda
-LOSS_COEFFICIENT = 14
-ALPHA = 15  # Slot for heat transfer coefficient
-QEXT = 16  # heat input into the branch [W]
-TEXT = 17 # temperature of surrounding [K]
-PL = 18 # Pressure lift [bar]
-TL = 19 # Temperature lift [K]
+K = 10  # Pipe roughness in [m]
+RE = 11 # Reynolds number
+LAMBDA = 12  # Lambda
+LOSS_COEFFICIENT = 13
+ALPHA = 14  # Slot for heat transfer coefficient
+QEXT = 15  # heat input into the branch [W]
+TEXT = 16 # temperature of surrounding [K]
+PL = 17 # Pressure lift [bar]
+TL = 18 # Temperature lift [K]
 
-MDOTINIT = 20  # mass in  [m/s]
-TOUTINIT = 21  # Internal slot for outlet pipe temperature
+MDOTINIT = 19  # mass in  [m/s]
+TOUTINIT = 20  # Internal slot for outlet pipe temperature
 
-FROM_NODE_T_SWITCHED = 22 # flag to indicate if the from and to node are switched in the thermal calculation
-FLOW_RETURN_CONNECT = 23 # Make sure that return and flow side are connected to the central pump, respectively
+FROM_NODE_T_SWITCHED = 21 # flag to indicate if the from and to node are switched in the thermal calculation
+FLOW_RETURN_CONNECT = 22 # Make sure that return and flow side are connected to the central pump, respectively
 
-DP_FRICT_LOSS = 24
+DP_FRICT_LOSS = 23
 
-branch_cols = 25
+branch_cols = 24
