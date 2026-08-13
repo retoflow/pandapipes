@@ -8,7 +8,7 @@ from enum import Enum
 
 import numpy as np
 from dataclasses import dataclass, field
-from pandapipes.idx_node import NODE_TYPE, NODE_TYPE_T, P, T
+from pandapipes.idx_node import IdxNode
 
 class HydVarEq(str, Enum):
     """Variable and equation types for the hydraulic linear system."""
@@ -321,7 +321,7 @@ class HydraulicSystemIndex(BaseSystemIndex):
 
     def __init__(self, node_pit: np.ndarray, branch_pit: np.ndarray) -> None:
         super().__init__()
-        self.slack_nodes = np.where(node_pit[:, NODE_TYPE] == P)[0].astype(np.int32)
+        self.slack_nodes = np.where(node_pit[:, IdxNode.NODE_TYPE] == IdxNode.P)[0].astype(np.int32)
 
         len_n = len(node_pit)
         len_b = len(branch_pit)
@@ -349,7 +349,7 @@ class HeatSystemIndex(BaseSystemIndex):
 
     def __init__(self, node_pit: np.ndarray, branch_pit: np.ndarray) -> None:
         super().__init__()
-        self.slack_nodes = np.where(node_pit[:, NODE_TYPE_T] == T)[0].astype(np.int32)
+        self.slack_nodes = np.where(node_pit[:, IdxNode.NODE_TYPE_T] == IdxNode.T)[0].astype(np.int32)
 
         len_n = len(node_pit)
         len_b = len(branch_pit)

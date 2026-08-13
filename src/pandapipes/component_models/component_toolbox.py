@@ -9,11 +9,7 @@ import pandas as pd
 from pandapipes import get_fluid
 from pandapipes.constants import NORMAL_PRESSURE, TEMP_GRADIENT_KPM, AVG_TEMPERATURE_K, \
     HEIGHT_EXPONENT
-from pandapipes.idx_branch import FROM_NODE, TO_NODE
-from pandapipes.idx_node import (EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T,
-                                 PINIT, NODE_TYPE, P, TINIT, NODE_TYPE_T, T, LOAD)
-from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
-from pandapipes.pf.internals_toolbox import _sum_by_group
+from pandapipes.pf.pipeflow_setup import get_lookup
 from pandas import Index
 
 

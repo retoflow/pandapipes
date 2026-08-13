@@ -10,9 +10,7 @@ from numpy import dtype
 
 from pandapipes.component_models.abstract_models.node_models import NodeComponent
 from pandapipes.component_models.component_toolbox import build_pit_entries, p_correction_height_air
-from pandapipes.idx_node import (L, ELEMENT_IDX, PINIT, HEIGHT, TINIT, PAMB,
-                                  ACTIVE as ACTIVE_ND, EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T,
-                                  LOAD, TABLE_IDX as NODE_TABLE_IDX, NODE_TYPE)
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.system_index import PitEntries, ComponentEquations, ThermVarEq
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_table_number, \
     get_lookup
@@ -90,8 +88,8 @@ class Junction(NodeComponent):
             height_vals = junctions.height_m.values
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [NODE_TABLE_IDX, ELEMENT_IDX, NODE_TYPE, HEIGHT, PAMB, ACTIVE_ND, TINIT, PINIT],
-                [float(table_nr), junctions.index.values.astype(float), float(L),
+                [IdxNode.TABLE_IDX, IdxNode.ELEMENT_IDX, IdxNode.NODE_TYPE, IdxNode.HEIGHT, IdxNode.PAMB, IdxNode.ACTIVE, IdxNode.TINIT, IdxNode.PINIT],
+                [float(table_nr), junctions.index.values.astype(float), float(IdxNode.L),
                  height_vals, p_correction_height_air(height_vals),
                  junctions.in_service.values.astype(float),
                  junctions.tfluid_k.values, junctions.pn_bar.values],
@@ -99,7 +97,7 @@ class Junction(NodeComponent):
         else:
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T, LOAD, TINIT, PINIT],
+                [IdxNode.EXT_GRID_OCCURENCE, IdxNode.EXT_GRID_OCCURENCE_T, IdxNode.LOAD, IdxNode.TINIT, IdxNode.PINIT],
                 [0., 0., 0., junctions.tfluid_k.values, junctions.pn_bar.values],
             )))
 
@@ -184,10 +182,10 @@ class Junction(NodeComponent):
             # TODO: This must be made more precise in different components
             net["res_internal"] = pd.DataFrame(
                 np.nan, columns=["t_k"], index=np.arange(len(net["_active_pit"]["node"][:,
-                                                           TINIT])),
+                                                           IdxNode.TINIT])),
                 dtype=np.float64
             )
-            net["res_internal"]["t_k"] = net["_active_pit"]["node"][:, TINIT]
+            net["res_internal"]["t_k"] = net["_active_pit"]["node"][:, IdxNode.TINIT]
 
         f, t = get_lookup(net, "node", "from_to")[cls.table_name()]
         junction_pit = net["_pit"]["node"][f:t, :]
@@ -195,10 +193,10 @@ class Junction(NodeComponent):
         if mode in ["hydraulics", "sequential", "bidirectional"]:
             junctions_connected_hydraulic = get_lookup(net, "node", "active_hydraulics")[f:t]
 
-            if np.any(junction_pit[junctions_connected_hydraulic, PINIT] < 0):
+            if np.any(junction_pit[junctions_connected_hydraulic, IdxNode.PINIT] < 0):
                 warn(UserWarning('Pipeflow converged, however, the results are physically incorrect '
                                  'as pressure is negative at nodes %s'
-                                 % junction_pit[junction_pit[:, PINIT] < 0, ELEMENT_IDX]))
+                                 % junction_pit[junction_pit[:, IdxNode.PINIT] < 0, IdxNode.ELEMENT_IDX]))
 
         #     res_table["p_bar"].values[junctions_connected_hydraulic] = junction_pit[:, PINIT]
         #     if mode == "hydraulics":
@@ -207,5 +205,5 @@ class Junction(NodeComponent):
         # if mode in ["heat", "sequential", "bidirectional]:
         #     junctions_connected_ht = get_lookup(net, "node", "active_heat_transfer")[f:t]
         #     res_table["t_k"].values[junctions_connected_ht] = junction_pit[:, TINIT]
-        res_table["p_bar"].values[:] = junction_pit[:, PINIT]
-        res_table["t_k"].values[:] = junction_pit[:, TINIT]
+        res_table["p_bar"].values[:] = junction_pit[:, IdxNode.PINIT]
+        res_table["t_k"].values[:] = junction_pit[:, IdxNode.TINIT]

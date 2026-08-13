@@ -11,10 +11,8 @@ from pandapipes.component_models.component_toolbox import (
     build_pit_entries, standard_branch_wo_internals_result_lookup,
 )
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import (
-    DIRECTED, ELEMENT_IDX, FROM_NODE, LOSS_COEFFICIENT as LC, TO_NODE,
-)
-from pandapipes.idx_node import PINIT
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.derivative_calculation import (
     calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal,
 )
@@ -79,7 +77,7 @@ class PressureControlComponent(BranchWOInternalsComponent):
         index_pc = junction_idx_lookup[juncts]
         registry.add_override(PitEntries(
             index_pc.astype(np.int32),
-            np.full(len(index_pc), PINIT, dtype=np.int32),
+            np.full(len(index_pc), IdxNode.PINIT, dtype=np.int32),
             press.astype(np.float64),
             mode=PitWriteMode.MEAN,
         ))
@@ -95,7 +93,7 @@ class PressureControlComponent(BranchWOInternalsComponent):
 
         rows = np.arange(f, t, dtype=np.int32)
         registry.add(PitEntries(*build_pit_entries(
-            rows, [LC, DIRECTED], [tbl.loss_coefficient.values, True],
+            rows, [IdxBranch.LOSS_COEFFICIENT, IdxBranch.DIRECTED], [tbl.loss_coefficient.values, True],
         )))
 
     @classmethod
@@ -118,7 +116,7 @@ class PressureControlComponent(BranchWOInternalsComponent):
                    "friction_model": get_net_option(net, "friction_model")}
 
         b_pit = branch_pit[f:t]
-        tbl_idx = b_pit[:, ELEMENT_IDX].astype(np.int32)
+        tbl_idx = b_pit[:, IdxBranch.ELEMENT_IDX].astype(np.int32)
         tbl = net[cls.table_name()]
 
         ctrl_active = tbl.control_active.values[tbl_idx].astype(bool)
@@ -140,8 +138,8 @@ class PressureControlComponent(BranchWOInternalsComponent):
             calculate_derivatives_hydraulic(net, b_pit, node_pit, options)
         )
 
-        fn = b_pit[:, FROM_NODE].astype(np.int32)
-        tn = b_pit[:, TO_NODE].astype(np.int32)
+        fn = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+        tn = b_pit[:, IdxBranch.TO_NODE].astype(np.int32)
 
         # Zero out branch equation contributions for ctrl_active branches (replaced by PC constraint)
         df_dm[ctrl_active]  = 0.0
@@ -197,7 +195,7 @@ class PressureControlComponent(BranchWOInternalsComponent):
             ca_index_pc = index_pc[ctrl_active]
             p_ctrl_col = sys_idx.idx(HydVarEq.PINIT, ca_index_pc)
             p_target = tbl.controlled_p_bar.values[tbl_idx[ctrl_active]]
-            p_ctrl_val = node_pit[ca_index_pc, PINIT]
+            p_ctrl_val = node_pit[ca_index_pc, IdxNode.PINIT]
 
             registry.add(ComponentEquations(
                 rows=ca_branch_eq.astype(np.int32),

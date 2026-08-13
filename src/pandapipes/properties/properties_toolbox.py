@@ -5,8 +5,8 @@
 import numpy as np
 
 from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE
-from pandapipes.idx_branch import TOUTINIT, TO_NODE
-from pandapipes.idx_node import TINIT, PINIT, PAMB
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 
 
@@ -151,12 +151,12 @@ def calculate_mass_fraction_from_molar_fraction(component_molar_proportions, com
 
 def get_branch_real_density(fluid, node_pit, branch_pit):
     from_nodes = get_from_nodes_corrected(branch_pit)
-    t_from = node_pit[from_nodes, TINIT]
-    t_to = branch_pit[:, TOUTINIT]
+    t_from = node_pit[from_nodes, IdxNode.TINIT]
+    t_to = branch_pit[:, IdxBranch.TOUTINIT]
     if fluid.is_gas:
-        from_p = node_pit[from_nodes, PINIT] + node_pit[from_nodes, PAMB]
+        from_p = node_pit[from_nodes, IdxNode.PINIT] + node_pit[from_nodes, IdxNode.PAMB]
         to_nodes = get_to_nodes_corrected(branch_pit)
-        to_p = node_pit[to_nodes, PINIT] + node_pit[to_nodes, PAMB]
+        to_p = node_pit[to_nodes, IdxNode.PINIT] + node_pit[to_nodes, IdxNode.PAMB]
         normal_rho = fluid.get_density(NORMAL_TEMPERATURE)
         from_rho = np.divide(normal_rho * NORMAL_TEMPERATURE * from_p,
                              t_from * NORMAL_PRESSURE * fluid.get_compressibility(from_p, t_from))
@@ -170,16 +170,16 @@ def get_branch_real_density(fluid, node_pit, branch_pit):
 
 def get_branch_real_eta(fluid, node_pit, branch_pit, pm):
     from_nodes = get_from_nodes_corrected(branch_pit)
-    t_from = node_pit[from_nodes, TINIT]
-    t_to = branch_pit[:, TOUTINIT]
+    t_from = node_pit[from_nodes, IdxNode.TINIT]
+    t_to = branch_pit[:, IdxBranch.TOUTINIT]
     tm = (t_from + t_to) / 2
     eta = fluid.get_viscosity(tm, p_bar=pm)
     return eta
 
 def get_branch_cp(fluid, node_pit, branch_pit):
     from_nodes = get_from_nodes_corrected(branch_pit)
-    t_from = node_pit[from_nodes, TINIT]
-    t_to = branch_pit[:, TOUTINIT]
+    t_from = node_pit[from_nodes, IdxNode.TINIT]
+    t_to = branch_pit[:, IdxBranch.TOUTINIT]
     cp_from = fluid.get_heat_capacity(t_from)
     cp_to = fluid.get_heat_capacity(t_to)
     cp = (cp_from + cp_to) / 2

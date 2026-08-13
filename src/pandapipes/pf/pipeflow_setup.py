@@ -8,19 +8,8 @@ import numpy as np
 from pandapower.auxiliary import ppException
 from scipy.sparse import coo_matrix, csgraph
 
-from pandapipes.idx_branch import (
-    TOUTINIT,
-    FROM_NODE,
-    TO_NODE,
-    branch_cols,
-    DIRECTED,
-    ACTIVE as ACTIVE_BR,
-    FLOW_RETURN_CONNECT,
-    ACTIVE,
-    ELEMENT_IDX as ELEMENT_IDX_BR,
-)
-from pandapipes.idx_node import NODE_TYPE, P, NODE_TYPE_T, node_cols, T, ACTIVE as ACTIVE_ND, \
-    TABLE_IDX as TABLE_IDX_ND, ELEMENT_IDX as ELEMENT_IDX_ND, INFEED, GE, TINIT
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.properties.fluids import get_fluid
 
 try:
@@ -389,7 +378,7 @@ def initialize_pit(net):
         pit = net["_pit"]
 
     if get_net_option(net, "transient") and get_net_option(net,"simulation_time_step") != 0 and net.converged:
-        create_old_pit(net, [TINIT], [TOUTINIT])
+        create_old_pit(net, [IdxNode.TINIT], [IdxBranch.TOUTINIT])
 
     from pandapipes.pf.system_index import PitRegistry
     node_pit = pit["node"]
@@ -406,7 +395,7 @@ def initialize_pit(net):
 
     if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0 or not net.converged:
         # This needs to be done after the pit values are set
-        create_old_pit(net, [TINIT], [TOUTINIT])
+        create_old_pit(net, [IdxNode.TINIT], [IdxBranch.TOUTINIT])
 
     if len(pit["node"]) == 0:
         logger.warning("There are no nodes defined. "
@@ -433,8 +422,8 @@ def create_empty_pit(net):
     node_length = get_lookup(net, "node", "length")
     branch_length = get_lookup(net, "branch", "length")
     # init empty pit
-    pit = {"node": np.zeros((node_length, node_cols), dtype=np.float64),
-           "branch": np.zeros((branch_length, branch_cols), dtype=np.float64),
+    pit = {"node": np.zeros((node_length, IdxNode.node_cols), dtype=np.float64),
+           "branch": np.zeros((branch_length, IdxBranch.branch_cols), dtype=np.float64),
            "components": {}}
     net["_pit"] = pit
     return pit
@@ -559,8 +548,8 @@ def identify_active_nodes_branches(net, hydraulic=True):
     branch_pit = net["_pit"]["branch"]
 
     if hydraulic:
-        nodes_connected = node_pit[:, ACTIVE_ND].astype(np.bool_)
-        branches_connected = branch_pit[:, ACTIVE_BR].astype(np.bool_)
+        nodes_connected = node_pit[:, IdxNode.ACTIVE].astype(np.bool_)
+        branches_connected = branch_pit[:, IdxBranch.ACTIVE].astype(np.bool_)
         if get_net_option(net, "check_connectivity"):
             nodes_connected, branches_connected = check_connectivity(net, branch_pit, node_pit,
                                                                      branches_connected, nodes_connected,
@@ -623,9 +612,9 @@ def check_connectivity(net, branch_pit, node_pit,
     :rtype: tuple(np.array)
     """
     if mode == "hydraulics":
-        slacks = np.where((node_pit[:, NODE_TYPE] == P) & nodes_connected)[0]
+        slacks = np.where((node_pit[:, IdxNode.NODE_TYPE] == IdxNode.P) & nodes_connected)[0]
     else:
-        slacks = np.where(((node_pit[:, NODE_TYPE_T] == T) | (node_pit[:, NODE_TYPE_T] == GE)) & nodes_connected)[0]
+        slacks = np.where(((node_pit[:, IdxNode.NODE_TYPE_T] == IdxNode.T) | (node_pit[:, IdxNode.NODE_TYPE_T] == IdxNode.GE)) & nodes_connected)[0]
 
     return perform_connectivity_search(net, node_pit, branch_pit, slacks,
                                        nodes_connected, branches_connected, mode=mode)
@@ -634,13 +623,13 @@ def check_connectivity(net, branch_pit, node_pit,
 def perform_connectivity_search(net, node_pit, branch_pit, slack_nodes, active_node_lookup, active_branch_lookup,
                                 mode="hydraulics"):
     if mode == 'hydraulics':
-        connect = branch_pit[:, FLOW_RETURN_CONNECT].astype(bool)
+        connect = branch_pit[:, IdxBranch.FLOW_RETURN_CONNECT].astype(bool)
         active_branch_lookup = active_branch_lookup & ~connect
         nodes_connected, branches_connected = (
             _connectivity(net, branch_pit, node_pit, active_branch_lookup, active_node_lookup, slack_nodes, mode))
-        from_nodes = branch_pit[:, FROM_NODE].astype(np.int32)
-        to_nodes = branch_pit[:, TO_NODE].astype(np.int32)
-        branch_active = branch_pit[:, ACTIVE].astype(bool)
+        from_nodes = branch_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+        to_nodes = branch_pit[:, IdxBranch.TO_NODE].astype(np.int32)
+        branch_active = branch_pit[:, IdxBranch.ACTIVE].astype(bool)
         active = nodes_connected[from_nodes] & nodes_connected[to_nodes] & branch_active
         branches_connected[connect & active] = True
     else:
@@ -651,9 +640,9 @@ def perform_connectivity_search(net, node_pit, branch_pit, slack_nodes, active_n
 
 def _connectivity(net, branch_pit, node_pit, active_branch_lookup, active_node_lookup, slack_nodes, mode):
     len_nodes = len(node_pit)
-    from_nodes = branch_pit[:, FROM_NODE].astype(np.int32)
-    to_nodes = branch_pit[:, TO_NODE].astype(np.int32)
-    directed = branch_pit[:, DIRECTED].astype(bool)
+    from_nodes = branch_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+    to_nodes = branch_pit[:, IdxBranch.TO_NODE].astype(np.int32)
+    directed = branch_pit[:, IdxBranch.DIRECTED].astype(bool)
     nobranch = np.sum(active_branch_lookup)
     nobranch_ud = np.sum(active_branch_lookup & ~directed)
     active_from_nodes = from_nodes[active_branch_lookup]
@@ -725,10 +714,10 @@ def get_table_index_list(net, pit_array, pit_indices, pit_type="node"):
     :return: List of table names and table indices belonging to the pit indices
     """
     int_pit = pit_array[pit_indices, :]
-    tables = np.unique(int_pit[:, TABLE_IDX_ND])
+    tables = np.unique(int_pit[:, IdxNode.TABLE_IDX])
     table_lookup = get_lookup(net, pit_type, "table")
-    return [(get_table_name(table_lookup, tbl), list(int_pit[int_pit[:, TABLE_IDX_ND] == tbl,
-    ELEMENT_IDX_ND].astype(np.int32)))
+    return [(get_table_name(table_lookup, tbl), list(int_pit[int_pit[:, IdxNode.TABLE_IDX] == tbl,
+    IdxNode.ELEMENT_IDX].astype(np.int32)))
             for tbl in tables]
 
 
@@ -788,8 +777,8 @@ def reduce_pit(net, mode="hydraulics"):
     branches_connected = get_lookup(net, "branch", "active_" + mode)
 
     for (comp_type, connected_elms, idx_col) in [
-        ("branch", branches_connected, ELEMENT_IDX_BR),
-        ("node", nodes_connected, ELEMENT_IDX_ND)
+        ("branch", branches_connected, IdxBranch.ELEMENT_IDX),
+        ("node", nodes_connected, IdxNode.ELEMENT_IDX)
     ]:
         comp_pit = net["_pit"][comp_type]
         comp_pit_old = net["_old_pit"][comp_type]
@@ -803,13 +792,26 @@ def reduce_pit(net, mode="hydraulics"):
 
     if not np.all(nodes_connected):
         reduced_node_lookup = np.cumsum(nodes_connected) - 1
-        active_pit["branch"][:, FROM_NODE] = reduced_node_lookup[
-            net["_pit"]["branch"][branches_connected, FROM_NODE].astype(np.int32)]
-        active_pit["branch"][:, TO_NODE] = reduced_node_lookup[
-            net["_pit"]["branch"][branches_connected, TO_NODE].astype(np.int32)]
+        active_pit["branch"][:, IdxBranch.FROM_NODE] = reduced_node_lookup[
+            net["_pit"]["branch"][branches_connected, IdxBranch.FROM_NODE].astype(np.int32)]
+        active_pit["branch"][:, IdxBranch.TO_NODE] = reduced_node_lookup[
+            net["_pit"]["branch"][branches_connected, IdxBranch.TO_NODE].astype(np.int32)]
 
     net["_active_pit"] = active_pit
     net["_active_old_pit"] = active_pit_old
+
+
+def branches_not_zero_flow(branch_pit):
+    """
+    Simple function to identify branches with flow based on the calculated velocity.
+
+    :param branch_pit: The pandapipes internal table of the network (including hydraulics results)
+    :type branch_pit: np.array
+    :return: branches_connected_flow - lookup array if branch is connected wrt. flow
+    :rtype: np.array
+    """
+    return (~np.isnan(branch_pit[:, IdxBranch.MDOTINIT])
+            & ~np.isclose(branch_pit[:, IdxBranch.MDOTINIT], 0, rtol=1e-10, atol=1e-10))
 
 
 def compute_infeed_nodes(branch_pit, node_pit):
@@ -821,22 +823,20 @@ def compute_infeed_nodes(branch_pit, node_pit):
     global branch_pit (not a per-component slice) so that cross-component topology
     is taken into account.
     """
-    from pandapipes.idx_branch import MDOTINIT
     from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 
-    branches_flow = (~np.isnan(branch_pit[:, MDOTINIT])
-                     & ~np.isclose(branch_pit[:, MDOTINIT], 0, rtol=1e-10, atol=1e-10))
+    branches_flow = branches_not_zero_flow(branch_pit)
     from_nodes = get_from_nodes_corrected(branch_pit)
     to_nodes = get_to_nodes_corrected(branch_pit)
     infeed = np.setdiff1d(from_nodes[branches_flow], to_nodes[branches_flow])
-    node_pit[infeed, INFEED] = True
+    node_pit[infeed, IdxNode.INFEED] = True
 
 
 def check_infeed_number(node_pit):
-    slack_nodes = node_pit[:, NODE_TYPE_T] == T
+    slack_nodes = node_pit[:, IdxNode.NODE_TYPE_T] == IdxNode.T
     if len(node_pit) == np.sum(slack_nodes):
-        node_pit[slack_nodes, INFEED] = True
-    infeed_nodes = node_pit[:, INFEED]
+        node_pit[slack_nodes, IdxNode.INFEED] = True
+    infeed_nodes = node_pit[:, IdxNode.INFEED]
     if np.sum(infeed_nodes) != np.sum(slack_nodes):
         return False
     return True

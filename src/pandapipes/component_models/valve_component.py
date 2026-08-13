@@ -11,8 +11,8 @@ from pandapipes.component_models.component_toolbox import (
 )
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE
-from pandapipes.idx_branch import LENGTH, K, TEXT, ALPHA, FROM_NODE, TO_NODE, TOUTINIT, MDOTINIT
-from pandapipes.idx_node import TINIT as TINIT_NODE, HEIGHT, PINIT, ACTIVE as ACTIVE_ND, PAMB
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.derivative_calculation import (
     calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal,
 )
@@ -105,14 +105,14 @@ class Valve(BranchWInternalsComponent):
 
         registry.add(PitEntries(*build_pit_entries(
             rows,
-            [TINIT_NODE, PINIT],
+            [IdxNode.TINIT, IdxNode.PINIT],
             [junc_df.tfluid_k.values[local_idx], junc_df.pn_bar.values[local_idx]],
         )))
         if not get_net_option(net, "transient") or get_net_option(net, "simulation_time_step") == 0:
             height_vals = junc_df.height_m.values[local_idx]
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [HEIGHT, PAMB, ACTIVE_ND],
+                [IdxNode.HEIGHT, IdxNode.PAMB, IdxNode.ACTIVE],
                 [height_vals, p_correction_height_air(height_vals),
                  junc_df.in_service.values[local_idx].astype(float)],
             )))
@@ -165,19 +165,19 @@ class Valve(BranchWInternalsComponent):
                 if np.any(fp):
                     registry.add_override(PitEntries(*build_pit_entries(
                         internal[pipes[fp], 0].astype(np.int32),
-                        [FROM_NODE], [valve_nodes[fp].astype(float)],
+                        [IdxBranch.FROM_NODE], [valve_nodes[fp].astype(float)],
                     )))
                 if np.any(~fp):
                     registry.add_override(PitEntries(*build_pit_entries(
                         internal[pipes[~fp], 1].astype(np.int32),
-                        [TO_NODE], [valve_nodes[~fp].astype(float)],
+                        [IdxBranch.TO_NODE], [valve_nodes[~fp].astype(float)],
                     )))
 
                 to_nodes[mask_p] = valve_nodes[inverse_index]
 
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [FROM_NODE, TO_NODE, LENGTH, K, TEXT, ALPHA],
+                [IdxBranch.FROM_NODE, IdxBranch.TO_NODE, IdxBranch.LENGTH, IdxBranch.K, IdxBranch.TEXT, IdxBranch.ALPHA],
                 [from_nodes.astype(float), to_nodes.astype(float),
                  np.zeros(len(rows)), np.full(len(rows), 1e-3),
                  np.full(len(rows), get_net_option(net, 'ambient_temperature')),
@@ -194,12 +194,12 @@ class Valve(BranchWInternalsComponent):
             toutinit[mask_p] = junc_df.tfluid_k.values[
                 junction_idx_lookup[from_junctions_raw[mask_p]] - f_junc
             ]
-        registry.add(PitEntries(*build_pit_entries(rows, [TOUTINIT], [toutinit])))
+        registry.add(PitEntries(*build_pit_entries(rows, [IdxBranch.TOUTINIT], [toutinit])))
 
         d_vals = tbl.inner_diameter_mm.values / 1000.
         area_vals = d_vals ** 2 * np.pi / 4
         mdotinit_vals = 0.1 * area_vals * get_fluid(net).get_density(NORMAL_TEMPERATURE)
-        registry.add(PitEntries(*build_pit_entries(rows, [MDOTINIT], [mdotinit_vals])))
+        registry.add(PitEntries(*build_pit_entries(rows, [IdxBranch.MDOTINIT], [mdotinit_vals])))
 
     @classmethod
     def register_hydraulic_equations(cls, net, branch_pit, node_pit, sys_idx, registry) -> None:
@@ -214,8 +214,8 @@ class Valve(BranchWInternalsComponent):
         )
 
         b_pit = branch_pit[f:t]
-        fn = b_pit[:, FROM_NODE].astype(np.int32)
-        tn = b_pit[:, TO_NODE].astype(np.int32)
+        fn = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+        tn = b_pit[:, IdxBranch.TO_NODE].astype(np.int32)
 
         # variables
         mdot_col   = sys_idx.idx(HydVarEq.MDOTINIT, branch_idx)

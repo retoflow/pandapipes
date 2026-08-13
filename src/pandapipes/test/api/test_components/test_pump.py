@@ -200,7 +200,7 @@ def test_pump_bypass_high_vdot(use_numba):
 def test_compression_power(use_numba):
     # based on example by "oporras"
     from pandapipes.component_models import R_UNIVERSAL
-    from pandapipes.idx_node import PAMB
+    from pandapipes.idx_node import IdxNode
 
     height_asl_m = 2842
     net = pandapipes.create_empty_network(fluid="methane")
@@ -225,8 +225,8 @@ def test_compression_power(use_numba):
                         use_numba=use_numba)
 
     # Local ambiental (atmospheric) pressure
-    p_amb_bar_j1 = net["_pit"]['node'][1][PAMB]
-    p_amb_bar_j2 = net["_pit"]['node'][2][PAMB]
+    p_amb_bar_j1 = net["_pit"]['node'][1][IdxNode.PAMB]
+    p_amb_bar_j2 = net["_pit"]['node'][2][IdxNode.PAMB]
 
     # Isentropic power for the compression
     R_spec = R_UNIVERSAL * 1e3 / pandapipes.get_fluid(net).get_molar_mass()

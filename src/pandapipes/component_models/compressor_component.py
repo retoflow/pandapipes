@@ -8,8 +8,8 @@ from numpy import dtype
 from pandapipes.component_models.component_toolbox import get_component_array
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.component_models.pump_component import Pump
-from pandapipes.idx_branch import MDOTINIT, FROM_NODE, PL
-from pandapipes.idx_node import PINIT, PAMB
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 
 
 class Compressor(Pump):
@@ -48,8 +48,8 @@ class Compressor(Pump):
         """Compute pressure lift from pressure_ratio and write into b_pit[:, PL]."""
         compr_array = get_component_array(net, cls.table_name())
         pressure_ratio = compr_array[tbl_idx, cls.PRESSURE_RATIO]
-        from_nodes = b_pit[:, FROM_NODE].astype(np.int32)
-        p_from = node_pit[from_nodes, PAMB] + node_pit[from_nodes, PINIT]
+        from_nodes = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+        p_from = node_pit[from_nodes, IdxNode.PAMB] + node_pit[from_nodes, IdxNode.PINIT]
         pl_abs = p_from * pressure_ratio - p_from
-        pl_abs[b_pit[:, MDOTINIT] < 0] = 0.0
-        b_pit[:, PL] = pl_abs
+        pl_abs[b_pit[:, IdxBranch.MDOTINIT] < 0] = 0.0
+        b_pit[:, IdxBranch.PL] = pl_abs

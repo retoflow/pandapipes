@@ -6,8 +6,7 @@ import numpy as np
 
 from pandapipes.component_models.abstract_models.branch_models import BranchComponent
 from pandapipes.component_models.component_toolbox import build_pit_entries
-from pandapipes.idx_branch import (FROM_NODE, TO_NODE, TOUTINIT, ELEMENT_IDX, ACTIVE, LENGTH, K, TEXT, ALPHA,
-                                   D, DO)
+from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_net_option, get_lookup
 
 try:
@@ -92,7 +91,7 @@ class BranchWOInternalsComponent(BranchComponent):
             d_val = 0.1
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [FROM_NODE, TO_NODE, TOUTINIT, ELEMENT_IDX, ACTIVE, LENGTH, K, TEXT, ALPHA, D, DO],
+                [IdxBranch.FROM_NODE, IdxBranch.TO_NODE, IdxBranch.TOUTINIT, IdxBranch.ELEMENT_IDX, IdxBranch.ACTIVE, IdxBranch.LENGTH, IdxBranch.K, IdxBranch.TEXT, IdxBranch.ALPHA, IdxBranch.D, IdxBranch.DO],
                 [from_nodes.astype(float), to_nodes.astype(float), toutinit_vals,
                  tbl.index.values.astype(float), tbl[cls.active_identifier()].values.astype(float),
                  0., 1e-3, float(ambient_t), 0., d_val, d_val],

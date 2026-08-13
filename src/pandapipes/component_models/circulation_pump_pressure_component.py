@@ -9,8 +9,8 @@ from pandapipes.component_models.abstract_models.circulation_pump import Circula
 from pandapipes.component_models.component_toolbox import build_pit_entries
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import GRAVITATION_CONSTANT, P_CONVERSION
-from pandapipes.idx_branch import FROM_NODE, TO_NODE, MDOTINIT, PL
-from pandapipes.idx_node import PINIT, PAMB, HEIGHT
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.derivative_calculation import calculate_derivatives_branch_thermal
 from pandapipes.pf.internals_toolbox import get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_lookup, get_fluid, get_net_option
@@ -60,7 +60,7 @@ class CirculationPumpPressure(CirculationPump):
 
         rows = np.arange(f, t, dtype=np.int32)
         registry.add(PitEntries(*build_pit_entries(
-            rows, [PL], [tbl['plift_bar'].values],
+            rows, [IdxBranch.PL], [tbl['plift_bar'].values],
         )))
 
     @classmethod
@@ -73,17 +73,17 @@ class CirculationPumpPressure(CirculationPump):
 
         branch_idx = np.arange(f, t, dtype=np.int32)
         b_pit = branch_pit[f:t]
-        fn = b_pit[:, FROM_NODE].astype(np.int32)
-        tn = b_pit[:, TO_NODE].astype(np.int32)
+        fn = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+        tn = b_pit[:, IdxBranch.TO_NODE].astype(np.int32)
 
         # Pressure residual: p_from - p_to + PL + height_correction
-        p_from_abs = node_pit[fn, PINIT] + node_pit[fn, PAMB]
-        p_to_abs = node_pit[tn, PINIT] + node_pit[tn, PAMB]
+        p_from_abs = node_pit[fn, IdxNode.PINIT] + node_pit[fn, IdxNode.PAMB]
+        p_to_abs = node_pit[tn, IdxNode.PINIT] + node_pit[tn, IdxNode.PAMB]
         fluid = get_fluid(net)
         rho = get_branch_real_density(fluid, node_pit, b_pit)
-        height_diff = node_pit[fn, HEIGHT] - node_pit[tn, HEIGHT]
+        height_diff = node_pit[fn, IdxNode.HEIGHT] - node_pit[tn, IdxNode.HEIGHT]
         const_height = rho * GRAVITATION_CONSTANT * height_diff / P_CONVERSION
-        load = p_from_abs - p_to_abs + b_pit[:, PL] + const_height
+        load = p_from_abs - p_to_abs + b_pit[:, IdxBranch.PL] + const_height
 
         # variables
         p_from_col = sys_idx.idx(HydVarEq.PINIT, fn)

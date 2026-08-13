@@ -5,7 +5,7 @@
 import numpy as np
 from numpy import dtype
 from pandapipes.component_models.abstract_models.node_element_models import NodeElementComponent
-from pandapipes.idx_node import LOAD, ELEMENT_IDX
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.internals_toolbox import _sum_by_group
 from pandapipes.pf.pipeflow_setup import get_lookup, get_net_option
 from pandapipes.pf.system_index import PitEntries, PitWriteMode, ComponentEquations, HydVarEq
@@ -57,7 +57,7 @@ class ConstFlow(NodeElementComponent):
         index = junction_idx_lookups[juncts].astype(np.int32)
         registry.add(PitEntries(
             index,
-            np.full(len(index), LOAD, dtype=np.int32),
+            np.full(len(index), IdxNode.LOAD, dtype=np.int32),
             loads_sum.astype(np.float64),
             mode=PitWriteMode.ADDITIVE,
         ))
@@ -116,7 +116,7 @@ class ConstFlow(NodeElementComponent):
         fj, tj = get_lookup(net, "node", "from_to")[cls.get_connected_node_type().table_name()]
         junct_pit = net["_pit"]["node"][fj:tj, :]
         nodes_connected_hyd = get_lookup(net, "node", "active_hydraulics")[fj:tj]
-        is_juncts = np.isin(loads.junction.values, junct_pit[nodes_connected_hyd, ELEMENT_IDX])
+        is_juncts = np.isin(loads.junction.values, junct_pit[nodes_connected_hyd, IdxNode.ELEMENT_IDX])
 
         is_calc = is_loads & is_juncts
         res_table["mdot_kg_per_s"].values[is_calc] = loads.mdot_kg_per_s.values[is_calc] \

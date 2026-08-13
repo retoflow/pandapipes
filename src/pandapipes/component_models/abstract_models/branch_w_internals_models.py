@@ -7,16 +7,8 @@ import pandas as pd
 
 from pandapipes.component_models.abstract_models.branch_models import BranchComponent
 from pandapipes.component_models.component_toolbox import get_internal_lookup_structure, build_pit_entries
-from pandapipes.idx_branch import (
-    ACTIVE,
-    ELEMENT_IDX,
-    D,
-    DO,
-    LOSS_COEFFICIENT as LC,
-    QEXT,
-    TABLE_IDX as BRANCH_TABLE_IDX,
-)
-from pandapipes.idx_node import L, NODE_TYPE, TABLE_IDX as NODE_TABLE_IDX
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_lookup, get_table_number, get_net_option
 
 try:
@@ -151,8 +143,8 @@ class BranchWInternalsComponent(BranchComponent):
             rows = np.arange(f, t, dtype=np.int32)
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [NODE_TABLE_IDX, NODE_TYPE],
-                [float(table_nr), float(L)],
+                [IdxNode.TABLE_IDX, IdxNode.NODE_TYPE],
+                [float(table_nr), float(IdxNode.L)],
             )))
 
     @classmethod
@@ -191,7 +183,7 @@ class BranchWInternalsComponent(BranchComponent):
             n = len(rows)
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [ELEMENT_IDX, ACTIVE, D, DO, LC, QEXT],
+                [IdxBranch.ELEMENT_IDX, IdxBranch.ACTIVE, IdxBranch.D, IdxBranch.DO, IdxBranch.LOSS_COEFFICIENT, IdxBranch.QEXT],
                 [elem_idx_vals, active_vals, d_vals, do_vals, lc_vals, np.zeros(n)],
             )))
 

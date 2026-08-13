@@ -5,11 +5,7 @@
 import numpy as np
 
 from pandapipes.component_models.abstract_models.base_component import Component
-from pandapipes.idx_branch import (
-    TABLE_IDX,
-    MDOTINIT,
-    TEXT,
-)
+from pandapipes.idx_branch import IdxBranch
 from pandapipes.component_models.component_toolbox import build_pit_entries
 from pandapipes.pf.pipeflow_setup import get_net_option, get_table_number, get_lookup
 
@@ -81,7 +77,7 @@ class BranchComponent(Component):
             branch_table_nr = get_table_number(get_lookup(net, "branch", "table"), cls.table_name())
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [TABLE_IDX],
+                [IdxBranch.TABLE_IDX],
                 [float(branch_table_nr)],
             )))
 

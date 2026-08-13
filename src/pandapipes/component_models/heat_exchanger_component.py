@@ -10,7 +10,7 @@ from pandapipes.component_models.abstract_models.branch_wo_internals_models impo
     BranchWOInternalsComponent
 from pandapipes.component_models.component_toolbox import build_pit_entries
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import QEXT, D, LOSS_COEFFICIENT as LC, DO, FROM_NODE, TO_NODE
+from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.derivative_calculation import calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup, get_net_option
@@ -69,7 +69,7 @@ class HeatExchanger(BranchWOInternalsComponent):
 
         registry.add_override(PitEntries(*build_pit_entries(
             rows,
-            [QEXT, D, DO, LC],
+            [IdxBranch.QEXT, IdxBranch.D, IdxBranch.DO, IdxBranch.LOSS_COEFFICIENT],
             [tbl.qext_w.values, d_vals, d_vals, tbl.loss_coefficient.values],
         ), mode=PitWriteMode.UNIQUE))
 
@@ -86,8 +86,8 @@ class HeatExchanger(BranchWOInternalsComponent):
         )
 
         b_pit = branch_pit[f:t]
-        fn = b_pit[:, FROM_NODE].astype(np.int32)
-        tn = b_pit[:, TO_NODE].astype(np.int32)
+        fn = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+        tn = b_pit[:, IdxBranch.TO_NODE].astype(np.int32)
 
         # variables
         mdot_col   = sys_idx.idx(HydVarEq.MDOTINIT, branch_idx)

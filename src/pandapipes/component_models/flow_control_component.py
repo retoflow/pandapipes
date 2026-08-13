@@ -10,9 +10,7 @@ from pandapipes.component_models.component_toolbox import (
     build_pit_entries, standard_branch_wo_internals_result_lookup, get_component_array,
 )
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import (
-    ELEMENT_IDX, FROM_NODE, TO_NODE, MDOTINIT, FLOW_RETURN_CONNECT,
-)
+from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.derivative_calculation import (
     calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal,
 )
@@ -71,7 +69,7 @@ class FlowControlComponent(BranchWOInternalsComponent):
 
         registry.add(PitEntries(*build_pit_entries(
             rows,
-            [MDOTINIT],
+            [IdxBranch.MDOTINIT],
             [tbl.controlled_mdot_kg_per_s.values],
         )))
 
@@ -79,7 +77,7 @@ class FlowControlComponent(BranchWOInternalsComponent):
         if np.any(ctrl_active):
             registry.add(PitEntries(*build_pit_entries(
                 rows[ctrl_active],
-                [FLOW_RETURN_CONNECT],
+                [IdxBranch.FLOW_RETURN_CONNECT],
                 [1.0],
             )))
 
@@ -106,9 +104,9 @@ class FlowControlComponent(BranchWOInternalsComponent):
         )
 
         b_pit = branch_pit[f:t]
-        fn = b_pit[:, FROM_NODE].astype(np.int32)
-        tn = b_pit[:, TO_NODE].astype(np.int32)
-        tbl_idx = b_pit[:, ELEMENT_IDX].astype(np.int32)
+        fn = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+        tn = b_pit[:, IdxBranch.TO_NODE].astype(np.int32)
+        tbl_idx = b_pit[:, IdxBranch.ELEMENT_IDX].astype(np.int32)
 
         ctrl_active = net[cls.table_name()].control_active.values[tbl_idx].astype(bool)
         controlled_mdot = net[cls.table_name()].controlled_mdot_kg_per_s.values[tbl_idx]
@@ -117,7 +115,7 @@ class FlowControlComponent(BranchWOInternalsComponent):
         df_dm[ctrl_active] = 1.0
         df_dp[ctrl_active] = 0.0
         df_dp1[ctrl_active] = 0.0
-        load[ctrl_active] = b_pit[ctrl_active, MDOTINIT] - controlled_mdot[ctrl_active]
+        load[ctrl_active] = b_pit[ctrl_active, IdxBranch.MDOTINIT] - controlled_mdot[ctrl_active]
         # load_fn / load_tn keep their MDOTINIT values — correct for all node mass balances
 
         # variables

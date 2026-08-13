@@ -8,8 +8,7 @@ from numpy import dtype
 from pandapipes.component_models.abstract_models.node_element_models import NodeElementComponent
 from pandapipes.component_models.component_toolbox import build_pit_entries
 from pandapipes.pf.pipeflow_setup import get_lookup
-from pandapipes.idx_node import (NODE_TYPE, P, PINIT, TINIT, MDOTSLACKINIT, INFEED,
-                                  EXT_GRID_OCCURENCE, EXT_GRID_OCCURENCE_T, NODE_TYPE_T, T)
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.system_index import ComponentEquations, EqWriteMode, PitEntries, PitWriteMode, HydVarEq, ThermVarEq
 
 try:
@@ -82,22 +81,22 @@ class ExtGrid(NodeElementComponent):
 
         registry.add_override(PitEntries(*build_pit_entries(
             index_p,
-            [PINIT, NODE_TYPE],
-            [ext_grids.p_bar.values[mask_p], float(P)],
+            [IdxNode.PINIT, IdxNode.NODE_TYPE],
+            [ext_grids.p_bar.values[mask_p], float(IdxNode.P)],
         ), mode=PitWriteMode.MEAN))
         registry.add_override(PitEntries(*build_pit_entries(
             index_t,
-            [TINIT, NODE_TYPE_T],
-            [ext_grids.t_k.values[mask_t], float(T)],
+            [IdxNode.TINIT, IdxNode.NODE_TYPE_T],
+            [ext_grids.t_k.values[mask_t], float(IdxNode.T)],
         ), mode=PitWriteMode.MEAN))
         registry.add_override(PitEntries(*build_pit_entries(
             index_p,
-            [EXT_GRID_OCCURENCE],
+            [IdxNode.EXT_GRID_OCCURENCE],
             [1.]),
             mode=PitWriteMode.ADDITIVE))
         registry.add_override(PitEntries(*build_pit_entries(
             index_t,
-            [EXT_GRID_OCCURENCE_T],
+            [IdxNode.EXT_GRID_OCCURENCE_T],
             [1.]),
             mode=PitWriteMode.ADDITIVE))
 
@@ -131,7 +130,7 @@ class ExtGrid(NodeElementComponent):
         cols_node = slack_col.astype(np.int32)
         data_node = np.ones(len(n_eq), dtype=np.float64)
         load_rows_node = n_eq.astype(np.int32)
-        load_node = node_pit[slack_nodes, MDOTSLACKINIT].astype(np.float64)
+        load_node = node_pit[slack_nodes, IdxNode.MDOTSLACKINIT].astype(np.float64)
 
         registry.add(ComponentEquations(
             rows=rows_slack,
@@ -170,7 +169,7 @@ class ExtGrid(NodeElementComponent):
         if not len(ext_nodes):
             return
 
-        infeed_mask = node_pit[:, INFEED].astype(bool)
+        infeed_mask = node_pit[:, IdxNode.INFEED].astype(bool)
         infeed_nodes = np.where(infeed_mask)[0].astype(np.int32)
 
         if not len(infeed_nodes):
@@ -241,7 +240,7 @@ class ExtGrid(NodeElementComponent):
         eg_nodes = get_lookup(net, "node", "index")[cls.get_connected_node_type().table_name()][
             junction[p_grids]]
         node_uni, inverse_nodes, counts = np.unique(eg_nodes, return_counts=True, return_inverse=True)
-        sum_mass_flows = node_pit[node_uni, MDOTSLACKINIT]
+        sum_mass_flows = node_pit[node_uni, IdxNode.MDOTSLACKINIT]
 
         # positive results mean that the ext_grid feeds in, negative means that the ext grid
         # extracts (like a load)

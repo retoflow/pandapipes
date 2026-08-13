@@ -17,10 +17,8 @@ from pandapipes.component_models.component_toolbox import (
 )
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE, R_UNIVERSAL, P_CONVERSION
-from pandapipes.idx_branch import (
-    ELEMENT_IDX, FROM_NODE, TO_NODE, MDOTINIT, D, PL,
-)
-from pandapipes.idx_node import PINIT, PAMB, TINIT as TINIT_NODE
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.derivative_calculation import (
     calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal,
 )
@@ -84,7 +82,7 @@ class Pump(BranchWOInternalsComponent):
         area_val = d_val ** 2 * np.pi / 4
         mdotinit = 0.1 * area_val * get_fluid(net).get_density(NORMAL_TEMPERATURE)
         registry.add(PitEntries(*build_pit_entries(
-            rows, [MDOTINIT], [mdotinit],
+            rows, [IdxBranch.MDOTINIT], [mdotinit],
         )))
 
     @classmethod
@@ -107,7 +105,7 @@ class Pump(BranchWOInternalsComponent):
             return
 
         b_pit = branch_pit[f:t]
-        tbl_idx = b_pit[:, ELEMENT_IDX].astype(np.int32)
+        tbl_idx = b_pit[:, IdxBranch.ELEMENT_IDX].astype(np.int32)
         cls._compute_pl(net, b_pit, node_pit, tbl_idx)
 
         options = {"use_numba": get_net_option(net, "use_numba"),
@@ -116,8 +114,8 @@ class Pump(BranchWOInternalsComponent):
             calculate_derivatives_hydraulic(net, b_pit, node_pit, options)
         )
 
-        fn = b_pit[:, FROM_NODE].astype(np.int32)
-        tn = b_pit[:, TO_NODE].astype(np.int32)
+        fn = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+        tn = b_pit[:, IdxBranch.TO_NODE].astype(np.int32)
 
         # variables
         mdot_col   = sys_idx.idx(HydVarEq.MDOTINIT, branch_idx)
@@ -168,13 +166,13 @@ class Pump(BranchWOInternalsComponent):
         idx = pump_array[tbl_idx, cls.STD_TYPE].astype(np.int32)
         std_types = get_std_type_lookup(net, cls.table_name())[idx]
 
-        from_nodes = b_pit[:, FROM_NODE].astype(np.int32)
+        from_nodes = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
         fluid = get_fluid(net)
-        area = np.pi * (b_pit[:, D] / 2) ** 2
-        v_mps = b_pit[:, MDOTINIT] / area / fluid.get_density(NORMAL_TEMPERATURE)
+        area = np.pi * (b_pit[:, IdxBranch.D] / 2) ** 2
+        v_mps = b_pit[:, IdxBranch.MDOTINIT] / area / fluid.get_density(NORMAL_TEMPERATURE)
         if fluid.is_gas:
-            p_from = node_pit[from_nodes, PAMB] + node_pit[from_nodes, PINIT]
-            t_from = node_pit[from_nodes, TINIT_NODE]
+            p_from = node_pit[from_nodes, IdxNode.PAMB] + node_pit[from_nodes, IdxNode.PINIT]
+            t_from = node_pit[from_nodes, IdxNode.TINIT]
             normfactor = (NORMAL_PRESSURE * t_from
                           * fluid.get_compressibility(p_from, t_from)
                           / (p_from * NORMAL_TEMPERATURE))
@@ -186,7 +184,7 @@ class Pump(BranchWOInternalsComponent):
         if len(std_types):
             fcts = itemgetter(*std_types)(net['std_types']['pump'])
             fcts = [fcts] if not isinstance(fcts, tuple) else fcts
-            b_pit[:, PL] = np.array(list(map(lambda f, v: f.get_pressure(v), fcts, vol)))
+            b_pit[:, IdxBranch.PL] = np.array(list(map(lambda f, v: f.get_pressure(v), fcts, vol)))
 
     @classmethod
     def register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry) -> None:
@@ -280,7 +278,7 @@ class Pump(BranchWOInternalsComponent):
             if net.fluid.is_gas:
                 p_from = branch_results["p_abs_from"][f:t]
                 p_to = branch_results["p_abs_to"][f:t]
-                t0 = net["_pit"]["node"][from_nodes, TINIT_NODE]
+                t0 = net["_pit"]["node"][from_nodes, IdxNode.TINIT]
                 mf_sum_int = branch_results["mf_from"][f:t]
                 compr = get_fluid(net).get_compressibility(p_from, t0)
                 try:

@@ -17,9 +17,8 @@ import pandapipes
 from pandapipes.component_models.abstract_models.branch_models import BranchComponent
 from pandapipes.component_models.abstract_models.node_element_models import NodeElementComponent
 from pandapipes.create import create_empty_network
-from pandapipes.idx_branch import branch_cols
-from pandapipes.idx_node import node_cols, \
-    T as TYPE_T, P as TYPE_P, PC as TYPE_PC, L as TYPE_L
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pandapipes_net import pandapipesNet
 from pandapipes.topology import create_nxgraph
 
@@ -546,7 +545,7 @@ def check_pressure_controllability(net, to_junction, controlled_junction):
 #     logger.info("dropped %d %s elements with %d switches" % (len(trafos), table, num_switches))
 
 
-pit_types = {TYPE_P: "P", TYPE_L: "L", TYPE_T: "T", TYPE_PC: "PC"}
+pit_types = {IdxNode.P: "P", IdxNode.L: "L", IdxNode.T: "T", IdxNode.PC: "PC"}
 int_cols = ["FROM_NODE", "TO_NODE", "ELEMENT_IDX", "EXT_GRID_OCCURENCE", "EXT_GRID_OCCURENCE_T"]
 bool_cols = ["ACTIVE"]
 
@@ -598,8 +597,8 @@ def get_internal_tables_pandas(net, convert_types=True):
     branch_pit = net["_pit"]["branch"]
     node_pit = net["_pit"]["node"]
 
-    missing_nodes = node_pit.shape[1] - node_cols
-    missing_branches = branch_pit.shape[1] - branch_cols
+    missing_nodes = node_pit.shape[1] - IdxNode.node_cols
+    missing_branches = branch_pit.shape[1] - IdxBranch.branch_cols
 
     if missing_nodes > 0:
         logger.warning("%d node pit entries are missing. Please verify the correctness of the "

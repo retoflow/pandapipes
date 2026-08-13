@@ -8,7 +8,7 @@ from numpy import dtype
 from pandapipes.component_models.abstract_models.circulation_pump import CirculationPump
 from pandapipes.component_models.component_toolbox import build_pit_entries
 from pandapipes.component_models.junction_component import Junction
-from pandapipes.idx_branch import MDOTINIT
+from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.derivative_calculation import calculate_derivatives_branch_thermal
 from pandapipes.pf.internals_toolbox import get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_lookup, get_net_option
@@ -63,7 +63,7 @@ class CirculationPumpMass(CirculationPump):
 
         rows = np.arange(f, t, dtype=np.int32)
         registry.add(PitEntries(*build_pit_entries(
-            rows, [MDOTINIT], [tbl.mdot_flow_kg_per_s.values],
+            rows, [IdxBranch.MDOTINIT], [tbl.mdot_flow_kg_per_s.values],
         )))
 
     @classmethod

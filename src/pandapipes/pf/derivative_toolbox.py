@@ -6,11 +6,11 @@ import logging
 import numpy as np
 from numpy import linalg
 from pandapipes.pf.internals_toolbox import _sum_by_group
+from pandapipes.pf.pipeflow_setup import branches_not_zero_flow
 from pandapipes.constants import P_CONVERSION, GRAVITATION_CONSTANT, NORMAL_PRESSURE, \
     NORMAL_TEMPERATURE
-from pandapipes.idx_branch import LENGTH, LAMBDA, D, LOSS_COEFFICIENT as LC, PL, \
-    MDOTINIT, TOUTINIT, FROM_NODE, TEXT, ALPHA, TL, QEXT, DO, DP_FRICT_LOSS
-from pandapipes.idx_node import HEIGHT, PINIT, PAMB, TINIT as TINIT_NODE
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 
 logger = logging.getLogger(__name__)
 
@@ -20,16 +20,16 @@ def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init
     # Formulas for pressure loss in incompressible flow
     # Use medium density ((rho_from + rho_to) / 2) for Darcy Weisbach according to
     # https://www.schweizer-fn.de/rohr/rohrleitung/rohrleitung.php#fluessigkeiten
-    m_init_abs = np.abs(branch_pit[:, MDOTINIT])
+    m_init_abs = np.abs(branch_pit[:, IdxBranch.MDOTINIT])
     m_abs_deriv = np.maximum(m_init_abs, 1e-8)
-    m_init2 = m_init_abs * branch_pit[:, MDOTINIT]
+    m_init2 = m_init_abs * branch_pit[:, IdxBranch.MDOTINIT]
     p_diff = p_init_i_abs - p_init_i1_abs
-    l = branch_pit[:, LENGTH]
-    lambd = branch_pit[:, LAMBDA]
-    lc = branch_pit[:, LC]
-    pl = branch_pit[:, PL]
+    l = branch_pit[:, IdxBranch.LENGTH]
+    lambd = branch_pit[:, IdxBranch.LAMBDA]
+    lc = branch_pit[:, IdxBranch.LOSS_COEFFICIENT]
+    pl = branch_pit[:, IdxBranch.PL]
 
-    d = branch_pit[:, D]
+    d = branch_pit[:, IdxBranch.D]
 
     const_height = rho * GRAVITATION_CONSTANT * height_difference / P_CONVERSION
     friction_term = l * lambd / d + lc
@@ -45,8 +45,8 @@ def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init
 
     df_dm_nodes = np.ones_like(der_lambda)
 
-    load_vec_nodes_from = branch_pit[:, MDOTINIT]
-    load_vec_nodes_to = branch_pit[:, MDOTINIT]
+    load_vec_nodes_from = branch_pit[:, IdxBranch.MDOTINIT]
+    load_vec_nodes_to = branch_pit[:, IdxBranch.MDOTINIT]
 
     dp_frict_loss = const_term * m_init2 * friction_term
 
@@ -56,17 +56,17 @@ def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init
 def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_init_i_abs, p_init_i1_abs,
                                   height_difference, comp_fact, der_comp, der_comp1, rho, rho_n):
     # Formulas for gas pressure loss according to laminar version
-    m_init_abs = np.abs(branch_pit[:, MDOTINIT])
+    m_init_abs = np.abs(branch_pit[:, IdxBranch.MDOTINIT])
     m_abs_deriv = np.maximum(m_init_abs, 1e-8)
-    m_init2 = branch_pit[:, MDOTINIT] * m_init_abs
+    m_init2 = branch_pit[:, IdxBranch.MDOTINIT] * m_init_abs
     p_diff = p_init_i_abs - p_init_i1_abs
     p_sum = p_init_i_abs + p_init_i1_abs
     p_sum_div = np.divide(1, p_sum)
-    from_nodes = branch_pit[:, FROM_NODE].astype(np.int32)
-    tm = (node_pit[from_nodes, TINIT_NODE] + branch_pit[:, TOUTINIT]) / 2
+    from_nodes = branch_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+    tm = (node_pit[from_nodes, IdxNode.TINIT] + branch_pit[:, IdxBranch.TOUTINIT]) / 2
     const_height = rho * GRAVITATION_CONSTANT * height_difference / P_CONVERSION
-    friction_term = np.divide(lambda_ * branch_pit[:, LENGTH], branch_pit[:, D]) + branch_pit[:, LC]
-    normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n * (np.pi * (branch_pit[:, D] / 2) ** 2) ** 2)
+    friction_term = np.divide(lambda_ * branch_pit[:, IdxBranch.LENGTH], branch_pit[:, IdxBranch.D]) + branch_pit[:, IdxBranch.LOSS_COEFFICIENT]
+    normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n * (np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2) ** 2)
 
     const_term_p = normal_term * m_init2 * friction_term * tm
     df_dp = 1. - const_term_p * p_sum_div * (der_comp - comp_fact * p_sum_div)
@@ -74,16 +74,16 @@ def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_i
 
     const_term_m = normal_term * p_sum_div * tm * comp_fact
     df_dm = - const_term_m * (2 * m_abs_deriv * friction_term +
-                            np.divide(der_lambda * branch_pit[:, LENGTH] * m_init2, branch_pit[:, D]))
+                            np.divide(der_lambda * branch_pit[:, IdxBranch.LENGTH] * m_init2, branch_pit[:, IdxBranch.D]))
     df_dm[np.isclose(m_init_abs, 0)] = 1.
 
-    load_vec = p_diff + branch_pit[:, PL] + const_height \
+    load_vec = p_diff + branch_pit[:, IdxBranch.PL] + const_height \
                - normal_term * comp_fact * m_init2 * friction_term * p_sum_div * tm
 
     df_dm_nodes = np.ones_like(lambda_)
 
-    load_vec_nodes_from = branch_pit[:, MDOTINIT]
-    load_vec_nodes_to = branch_pit[:, MDOTINIT]
+    load_vec_nodes_from = branch_pit[:, IdxBranch.MDOTINIT]
+    load_vec_nodes_to = branch_pit[:, IdxBranch.MDOTINIT]
     dp_frict_loss = normal_term * comp_fact * m_init2 * friction_term * p_sum_div * tm
 
     return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
@@ -94,22 +94,22 @@ def derivatives_branch_thermal_np(branch_pit,
                                    cp_n, cp_b,
                                    rho, dt, transient, amb):
     """Branch-level thermal derivatives: fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout."""
-    mdot = np.abs(branch_pit[:, MDOTINIT])
-    t_amb = branch_pit[:, TEXT]
-    length = branch_pit[:, LENGTH]
-    alpha = branch_pit[:, ALPHA] * np.pi * branch_pit[:, DO]
-    tl = branch_pit[:, TL]
-    qext = branch_pit[:, QEXT]
+    mdot = np.abs(branch_pit[:, IdxBranch.MDOTINIT])
+    t_amb = branch_pit[:, IdxBranch.TEXT]
+    length = branch_pit[:, IdxBranch.LENGTH]
+    alpha = branch_pit[:, IdxBranch.ALPHA] * np.pi * branch_pit[:, IdxBranch.DO]
+    tl = branch_pit[:, IdxBranch.TL]
+    qext = branch_pit[:, IdxBranch.QEXT]
 
-    branches_flow = _branches_not_zero_flow(branch_pit)
+    branches_flow = branches_not_zero_flow(branch_pit)
 
     fnt = cp_n * mdot * (t_init_i1 - t_init_nt)
     dfnt_dt = - cp_n * mdot
     dfnt_dtout = cp_n * mdot
 
     if transient:
-        area = np.pi * (branch_pit[:, D] / 2) ** 2
-        tvor = branch_pit_old[:, branch_pit_old_lookup[TOUTINIT]]
+        area = np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2
+        tvor = branch_pit_old[:, branch_pit_old_lookup[IdxBranch.TOUTINIT]]
 
         fb = (
                 rho * area * cp_b * (t_init_i1 - tvor) * (1 / dt) * length
@@ -122,7 +122,7 @@ def derivatives_branch_thermal_np(branch_pit,
 
         if np.any(~branches_flow):
             # TODO: maybe replace this statement with a component lookup
-            zero_length = np.isclose(branch_pit[:, LENGTH], 0, atol=1e-10)
+            zero_length = np.isclose(branch_pit[:, IdxBranch.LENGTH], 0, atol=1e-10)
             mask = zero_length & ~branches_flow
             if np.any(mask):
                 fb[mask] = (
@@ -133,8 +133,8 @@ def derivatives_branch_thermal_np(branch_pit,
                 dfb_dtout[mask] = (rho[mask] * area[mask] * cp_b[mask] / dt +
                                    alpha[mask])
     else:
-        non_zero_length_mask = ~np.isclose(branch_pit[:, LENGTH], 0, rtol=1e-6, atol=1e-10)
-        if np.any(non_zero_length_mask & (np.abs(branch_pit[:, QEXT]) > 1e-12)):
+        non_zero_length_mask = ~np.isclose(branch_pit[:, IdxBranch.LENGTH], 0, rtol=1e-6, atol=1e-10)
+        if np.any(non_zero_length_mask & (np.abs(branch_pit[:, IdxBranch.QEXT]) > 1e-12)):
             logger.warning(
                 "A branch with non zero length has a non zero external heat load. This might lead "
                 "to errors in the calculation, as the overlap of temperature reduction from heat "
@@ -168,7 +168,7 @@ def derivatives_node_thermal_np(node_pit, branch_pit,
                                  t_init_i, t_init_n,
                                  cp_b, rho, dt, transient, amb):
     """Node stagnant thermal derivatives: fn, dfn_dt. Must be called with the full branch pit."""
-    branches_flow = _branches_not_zero_flow(branch_pit)
+    branches_flow = branches_not_zero_flow(branch_pit)
     nodes_flow = np.isin(np.arange(len(node_pit)),
                          np.concatenate([from_nodes[branches_flow], to_nodes[branches_flow]]))
 
@@ -176,17 +176,17 @@ def derivatives_node_thermal_np(node_pit, branch_pit,
     dfn_dt = np.zeros_like(t_init_n)
 
     if transient:
-        area = np.pi * (branch_pit[:, D] / 2) ** 2
-        alpha = branch_pit[:, ALPHA] * np.pi * branch_pit[:, DO]
-        t_amb = branch_pit[:, TEXT]
+        area = np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2
+        alpha = branch_pit[:, IdxBranch.ALPHA] * np.pi * branch_pit[:, IdxBranch.DO]
+        t_amb = branch_pit[:, IdxBranch.TEXT]
 
         if np.any(~nodes_flow):
             fn_zero = ~nodes_flow[from_nodes]
             tn_zero = ~nodes_flow[to_nodes]
 
-            t_from_node_vor_zero = node_pit_old[from_nodes[fn_zero], node_pit_old_lookup[TINIT_NODE]]
-            t_to_node_vor_zero = node_pit_old[to_nodes[tn_zero], node_pit_old_lookup[TINIT_NODE]]
-            t_to_node = node_pit[to_nodes[tn_zero], TINIT_NODE]
+            t_from_node_vor_zero = node_pit_old[from_nodes[fn_zero], node_pit_old_lookup[IdxNode.TINIT]]
+            t_to_node_vor_zero = node_pit_old[to_nodes[tn_zero], node_pit_old_lookup[IdxNode.TINIT]]
+            t_to_node = node_pit[to_nodes[tn_zero], IdxNode.TINIT]
 
             fn_eq = (rho[fn_zero] * area[fn_zero] * cp_b[fn_zero] * (1 / dt)
                      * (t_init_i[fn_zero] - t_from_node_vor_zero)
@@ -310,20 +310,8 @@ def colebrook_np(re, d, k, lambda_nikuradse, dummy, max_iter):
 
 
 def calc_derived_values_np(node_pit, from_nodes, to_nodes):
-    tinit_branch = (node_pit[from_nodes, TINIT_NODE] + node_pit[to_nodes, TINIT_NODE]) / 2
-    height_difference = node_pit[from_nodes, HEIGHT] - node_pit[to_nodes, HEIGHT]
-    p_init_i_abs = node_pit[from_nodes, PINIT] + node_pit[from_nodes, PAMB]
-    p_init_i1_abs = node_pit[to_nodes, PINIT] + node_pit[to_nodes, PAMB]
+    tinit_branch = (node_pit[from_nodes, IdxNode.TINIT] + node_pit[to_nodes, IdxNode.TINIT]) / 2
+    height_difference = node_pit[from_nodes, IdxNode.HEIGHT] - node_pit[to_nodes, IdxNode.HEIGHT]
+    p_init_i_abs = node_pit[from_nodes, IdxNode.PINIT] + node_pit[from_nodes, IdxNode.PAMB]
+    p_init_i1_abs = node_pit[to_nodes, IdxNode.PINIT] + node_pit[to_nodes, IdxNode.PAMB]
     return tinit_branch, height_difference, p_init_i_abs, p_init_i1_abs
-
-def _branches_not_zero_flow(branch_pit):
-    """
-    Simple function to identify branches with flow based on the calculated velocity.
-
-    :param branch_pit: The pandapipes internal table of the network (including hydraulics results)
-    :type branch_pit: np.array
-    :return: branches_connected_flow - lookup array if branch is connected wrt. flow
-    :rtype: np.array
-    """
-    # TODO: is this formulation correct or could there be any caveats?
-    return ~np.isnan(branch_pit[:, MDOTINIT]) & ~np.isclose(branch_pit[:, MDOTINIT], 0, rtol=1e-10, atol=1e-10)

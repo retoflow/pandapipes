@@ -13,8 +13,8 @@ import pytest
 from packaging import version
 from pandapipes import networks as nw, BranchComponent
 from pandapipes.component_models import NodeComponent
-from pandapipes.idx_branch import branch_cols
-from pandapipes.idx_node import node_cols
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.test.api.test_convert_format import found_versions, folder, minimal_version_two_nets
 
 try:
@@ -313,8 +313,8 @@ def test_pit_extraction():
 
         node_table, branch_table = pandapipes.get_internal_tables_pandas(net)
 
-        assert node_table.shape[1] == node_cols
-        assert branch_table.shape[1] == branch_cols
+        assert node_table.shape[1] == IdxNode.node_cols
+        assert branch_table.shape[1] == IdxBranch.branch_cols
 
         for comp in net.component_list:
             tbl = comp.table_name()

@@ -3,9 +3,8 @@ from numpy import linalg
 
 from pandapipes.constants import P_CONVERSION, GRAVITATION_CONSTANT, NORMAL_PRESSURE, \
     NORMAL_TEMPERATURE
-from pandapipes.idx_branch import LENGTH, LAMBDA, D, LOSS_COEFFICIENT as LC, PL, \
-    MDOTINIT, FROM_NODE, TOUTINIT, TEXT, ALPHA, TL, QEXT, DO
-from pandapipes.idx_node import HEIGHT, PAMB, PINIT, TINIT as TINIT_NODE
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 
 try:
     from numba import jit
@@ -30,22 +29,22 @@ def derivatives_hydraulic_incomp_numba(branch_pit, der_lambda, p_init_i_abs, p_i
     dp_frict_loss = np.zeros_like(der_lambda)
 
     for i in range(le):
-        m_init_abs = np.abs(branch_pit[i][MDOTINIT])
+        m_init_abs = np.abs(branch_pit[i][IdxBranch.MDOTINIT])
         m_abs_deriv = max(m_init_abs, 1e-8)
-        m_init2 = m_init_abs * branch_pit[i][MDOTINIT]
+        m_init2 = m_init_abs * branch_pit[i][IdxBranch.MDOTINIT]
         p_diff = p_init_i_abs[i] - p_init_i1_abs[i]
         const_height = rho[i] * GRAVITATION_CONSTANT * height_difference[i] / P_CONVERSION
-        friction_term = np.divide(branch_pit[i][LENGTH] * branch_pit[i][LAMBDA], branch_pit[i][D]) \
-            + branch_pit[i][LC]
-        const_term = np.divide(1, (np.pi * (branch_pit[i][D] / 2) ** 2) ** 2 * rho[i] * P_CONVERSION * 2)
+        friction_term = np.divide(branch_pit[i][IdxBranch.LENGTH] * branch_pit[i][IdxBranch.LAMBDA], branch_pit[i][IdxBranch.D]) \
+            + branch_pit[i][IdxBranch.LOSS_COEFFICIENT]
+        const_term = np.divide(1, (np.pi * (branch_pit[i][IdxBranch.D] / 2) ** 2) ** 2 * rho[i] * P_CONVERSION * 2)
 
         df_dm[i] = -1. * const_term * (2 * m_abs_deriv * friction_term + der_lambda[i]
-                                   * np.divide(branch_pit[i][LENGTH], branch_pit[i][D]) * m_init2)
+                                   * np.divide(branch_pit[i][IdxBranch.LENGTH], branch_pit[i][IdxBranch.D]) * m_init2)
 
-        load_vec[i] = p_diff + branch_pit[i][PL] + const_height - const_term * m_init2 * friction_term
+        load_vec[i] = p_diff + branch_pit[i][IdxBranch.PL] + const_height - const_term * m_init2 * friction_term
 
-        load_vec_nodes_from[i] = branch_pit[i][MDOTINIT]
-        load_vec_nodes_to[i] = branch_pit[i][MDOTINIT]
+        load_vec_nodes_from[i] = branch_pit[i][IdxBranch.MDOTINIT]
+        load_vec_nodes_to[i] = branch_pit[i][IdxBranch.MDOTINIT]
         dp_frict_loss[i] = const_term * m_init2 * friction_term
     return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
 
@@ -62,28 +61,28 @@ def derivatives_hydraulic_comp_numba(node_pit, branch_pit, lambda_, der_lambda, 
     load_vec_nodes_from = np.zeros_like(der_lambda)
     load_vec_nodes_to = np.zeros_like(der_lambda)
     df_dm_nodes = np.ones_like(der_lambda)
-    from_nodes = branch_pit[:, FROM_NODE].astype(np.int32)
+    from_nodes = branch_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
     dp_frict_loss = np.zeros_like(der_lambda)
 
     # Formulas for gas pressure loss according to laminar version
     for i in range(le):
         # compressibility settings
-        m_init_abs = np.abs(branch_pit[i][MDOTINIT])
+        m_init_abs = np.abs(branch_pit[i][IdxBranch.MDOTINIT])
         m_abs_deriv = max(m_init_abs, 1e-8)
-        m_init2 = branch_pit[i][MDOTINIT] * m_init_abs
+        m_init2 = branch_pit[i][IdxBranch.MDOTINIT] * m_init_abs
         p_diff = p_init_i_abs[i] - p_init_i1_abs[i]
         p_sum = p_init_i_abs[i] + p_init_i1_abs[i]
         p_sum_div = np.divide(1, p_sum)
         fn = from_nodes[i]
-        tm = (node_pit[fn, TINIT_NODE] + branch_pit[i][TOUTINIT]) / 2
+        tm = (node_pit[fn, IdxNode.TINIT] + branch_pit[i][IdxBranch.TOUTINIT]) / 2
 
         const_height =  rho[i] * GRAVITATION_CONSTANT * height_difference[i] / P_CONVERSION
-        friction_term = np.divide(lambda_[i] * branch_pit[i][LENGTH], branch_pit[i][D]) + \
-                        branch_pit[i][LC]
+        friction_term = np.divide(lambda_[i] * branch_pit[i][IdxBranch.LENGTH], branch_pit[i][IdxBranch.D]) + \
+                        branch_pit[i][IdxBranch.LOSS_COEFFICIENT]
         normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n[i] *
-                                (np.pi * (branch_pit[i][D] / 2) ** 2) ** 2)
+                                (np.pi * (branch_pit[i][IdxBranch.D] / 2) ** 2) ** 2)
 
-        load_vec[i] = p_diff + branch_pit[i][PL] + const_height \
+        load_vec[i] = p_diff + branch_pit[i][IdxBranch.PL] + const_height \
             - normal_term * comp_fact[i] * m_init2 * friction_term * p_sum_div * tm
 
         const_term = normal_term * m_init2 * friction_term * tm
@@ -91,10 +90,10 @@ def derivatives_hydraulic_comp_numba(node_pit, branch_pit, lambda_, der_lambda, 
         df_dp1[i] = -1. - const_term * p_sum_div * (der_comp1[i] - comp_fact[i] * p_sum_div)
 
         df_dm[i] = -1. * normal_term * comp_fact[i] * p_sum_div * tm * (2 * m_abs_deriv * friction_term
-            + np.divide(der_lambda[i] * branch_pit[i][LENGTH] * m_init2, branch_pit[i][D]))
+            + np.divide(der_lambda[i] * branch_pit[i][IdxBranch.LENGTH] * m_init2, branch_pit[i][IdxBranch.D]))
 
-        load_vec_nodes_from[i] = branch_pit[i][MDOTINIT]
-        load_vec_nodes_to[i] = branch_pit[i][MDOTINIT]
+        load_vec_nodes_from[i] = branch_pit[i][IdxBranch.MDOTINIT]
+        load_vec_nodes_to[i] = branch_pit[i][IdxBranch.MDOTINIT]
         dp_frict_loss[i] = normal_term * comp_fact[i] * m_init2 * friction_term * p_sum_div * tm
     return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
 
@@ -107,7 +106,7 @@ def _make_lookups(branch_pit, to_nodes, from_nodes):
     club_from = np.zeros(max_val_from + 1, dtype=bool)
     branches_flow = np.zeros_like(to_nodes, dtype=bool)
     for i in range(len(to_nodes)):
-        mdot = branch_pit[i, MDOTINIT]
+        mdot = branch_pit[i, IdxBranch.MDOTINIT]
         branches_flow[i] = (not np.isnan(mdot)) and (abs(mdot) > 1e-10)
         if branches_flow[i]:
             club_to[to_nodes[i]] = True
@@ -163,20 +162,20 @@ def derivatives_thermal_numba(node_pit, branch_pit,
         # this is not required currently, but useful when implementing leakages
         # m_init_i = np.abs(branch_pit[:, MDOTINIT])
         # m_init_i1 = np.abs(branch_pit[:, MDOTINIT])
-        mdot = np.abs(branch_pit[i][MDOTINIT])
-        t_amb = branch_pit[i][TEXT]
-        length = branch_pit[i][LENGTH]
-        alpha = branch_pit[i][ALPHA] * np.pi * branch_pit[i][DO]
-        tl = branch_pit[i][TL]
-        qext = branch_pit[i][QEXT]
+        mdot = np.abs(branch_pit[i][IdxBranch.MDOTINIT])
+        t_amb = branch_pit[i][IdxBranch.TEXT]
+        length = branch_pit[i][IdxBranch.LENGTH]
+        alpha = branch_pit[i][IdxBranch.ALPHA] * np.pi * branch_pit[i][IdxBranch.DO]
+        tl = branch_pit[i][IdxBranch.TL]
+        qext = branch_pit[i][IdxBranch.QEXT]
 
         fnt[i] = cp_n[i] * mdot * (t_init_i1[i] - t_init_nt[i])
         dfnt_dt[i] = - cp_n[i] * mdot
         dfnt_dtout[i] = cp_n[i] * mdot
 
         if transient:
-            area = np.pi * (branch_pit[i][D] / 2) ** 2
-            tvor = branch_pit_old[i][branch_pit_old_lookup[TOUTINIT]]
+            area = np.pi * (branch_pit[i][IdxBranch.D] / 2) ** 2
+            tvor = branch_pit_old[i][branch_pit_old_lookup[IdxBranch.TOUTINIT]]
 
             fb[i] = (
                     rho[i] * area * cp_b[i] * (t_init_i1[i] - tvor) * (1 / dt) * length
@@ -187,7 +186,7 @@ def derivatives_thermal_numba(node_pit, branch_pit,
             dfb_dt[i] = - cp_b[i] * mdot
             dfb_dtout[i] = rho[i] * area * cp_b[i] / dt * length + cp_b[i] * mdot + alpha * length
 
-            if ~branches_flow[i] & (abs(branch_pit[i][LENGTH] < 1.e-8)):
+            if ~branches_flow[i] & (abs(branch_pit[i][IdxBranch.LENGTH] < 1.e-8)):
                 fb[i] = rho[i] * area * cp_b[i] * (t_init_i1[i] - tvor) * (1 / dt) - alpha * (t_amb - t_init_i1[i]) + qext
                 dfb_dt[i] = 0
                 dfb_dtout[i] = rho[i] * area * cp_b[i] / dt + alpha
@@ -195,15 +194,15 @@ def derivatives_thermal_numba(node_pit, branch_pit,
             fn_zero = ~nodes_flow[from_nodes[i]]
             tn_zero = ~nodes_flow[to_nodes[i]]
             if fn_zero:
-                t_from_node_vor_zero = node_pit_old[from_nodes[i], node_pit_old_lookup[TINIT_NODE]]
+                t_from_node_vor_zero = node_pit_old[from_nodes[i], node_pit_old_lookup[IdxNode.TINIT]]
                 fn_eq = (rho[i] * area * cp_b[i] * (1 / dt) * (t_init_i[i] - t_from_node_vor_zero)
                          - alpha * (t_amb - t_init_i[i]))
                 fn_deriv = rho[i] * area * cp_b[i] * (1 / dt) + alpha
                 dfn_dt[from_nodes[i]] += fn_deriv
                 fn[from_nodes[i]] += fn_eq
             if tn_zero:
-                t_to_node_vor_zero = node_pit_old[to_nodes[i], node_pit_old_lookup[TINIT_NODE]]
-                t_to_node = node_pit[to_nodes[i], TINIT_NODE]
+                t_to_node_vor_zero = node_pit_old[to_nodes[i], node_pit_old_lookup[IdxNode.TINIT]]
+                t_to_node = node_pit[to_nodes[i], IdxNode.TINIT]
                 tn_eq = (rho[i] * area * cp_b[i] * (1 / dt) * (t_to_node - t_to_node_vor_zero)
                          - alpha * (t_amb - t_to_node))
                 tn_deriv = (rho[i]* area * cp_b[i] * (1 / dt) + alpha)
@@ -247,24 +246,24 @@ def derivatives_branch_thermal_numba(branch_pit,
 
     branches_flow = np.zeros(b, dtype=bool)
     for i in range(b):
-        mdot_val = branch_pit[i, MDOTINIT]
+        mdot_val = branch_pit[i, IdxBranch.MDOTINIT]
         branches_flow[i] = (not np.isnan(mdot_val)) and (abs(mdot_val) > 1e-10)
 
     for i in range(b):
-        mdot = np.abs(branch_pit[i][MDOTINIT])
-        t_amb = branch_pit[i][TEXT]
-        length = branch_pit[i][LENGTH]
-        alpha = branch_pit[i][ALPHA] * np.pi * branch_pit[i][DO]
-        tl = branch_pit[i][TL]
-        qext = branch_pit[i][QEXT]
+        mdot = np.abs(branch_pit[i][IdxBranch.MDOTINIT])
+        t_amb = branch_pit[i][IdxBranch.TEXT]
+        length = branch_pit[i][IdxBranch.LENGTH]
+        alpha = branch_pit[i][IdxBranch.ALPHA] * np.pi * branch_pit[i][IdxBranch.DO]
+        tl = branch_pit[i][IdxBranch.TL]
+        qext = branch_pit[i][IdxBranch.QEXT]
 
         fnt[i] = cp_n[i] * mdot * (t_init_i1[i] - t_init_nt[i])
         dfnt_dt[i] = -cp_n[i] * mdot
         dfnt_dtout[i] = cp_n[i] * mdot
 
         if transient:
-            area = np.pi * (branch_pit[i][D] / 2) ** 2
-            tvor = branch_pit_old[i][branch_pit_old_lookup[TOUTINIT]]
+            area = np.pi * (branch_pit[i][IdxBranch.D] / 2) ** 2
+            tvor = branch_pit_old[i][branch_pit_old_lookup[IdxBranch.TOUTINIT]]
 
             fb[i] = (
                 rho[i] * area * cp_b[i] * (t_init_i1[i] - tvor) * (1 / dt) * length
@@ -274,7 +273,7 @@ def derivatives_branch_thermal_numba(branch_pit,
             dfb_dt[i] = -cp_b[i] * mdot
             dfb_dtout[i] = rho[i] * area * cp_b[i] / dt * length + cp_b[i] * mdot + alpha * length
 
-            if not branches_flow[i] and abs(branch_pit[i][LENGTH]) < 1e-8:
+            if not branches_flow[i] and abs(branch_pit[i][IdxBranch.LENGTH]) < 1e-8:
                 fb[i] = (rho[i] * area * cp_b[i] * (t_init_i1[i] - tvor) * (1 / dt)
                          - alpha * (t_amb - t_init_i1[i]) + qext)
                 dfb_dt[i] = 0
@@ -334,23 +333,23 @@ def derivatives_node_thermal_numba(node_pit, branch_pit,
 
     if transient:
         for i in range(b):
-            area = np.pi * (branch_pit[i][D] / 2) ** 2
-            t_amb = branch_pit[i][TEXT]
-            alpha = branch_pit[i][ALPHA] * np.pi * branch_pit[i][DO]
+            area = np.pi * (branch_pit[i][IdxBranch.D] / 2) ** 2
+            t_amb = branch_pit[i][IdxBranch.TEXT]
+            alpha = branch_pit[i][IdxBranch.ALPHA] * np.pi * branch_pit[i][IdxBranch.DO]
 
             fn_zero = not nodes_flow[from_nodes[i]]
             tn_zero = not nodes_flow[to_nodes[i]]
 
             if fn_zero:
-                t_from_vor = node_pit_old[from_nodes[i], node_pit_old_lookup[TINIT_NODE]]
+                t_from_vor = node_pit_old[from_nodes[i], node_pit_old_lookup[IdxNode.TINIT]]
                 fn_eq = (rho[i] * area * cp_b[i] * (1 / dt) * (t_init_i[i] - t_from_vor)
                          - alpha * (t_amb - t_init_i[i]))
                 fn_deriv = rho[i] * area * cp_b[i] * (1 / dt) + alpha
                 dfn_dt[from_nodes[i]] += fn_deriv
                 fn[from_nodes[i]] += fn_eq
             if tn_zero:
-                t_to_vor = node_pit_old[to_nodes[i], node_pit_old_lookup[TINIT_NODE]]
-                t_to = node_pit[to_nodes[i], TINIT_NODE]
+                t_to_vor = node_pit_old[to_nodes[i], node_pit_old_lookup[IdxNode.TINIT]]
+                t_to = node_pit[to_nodes[i], IdxNode.TINIT]
                 tn_eq = (rho[i] * area * cp_b[i] * (1 / dt) * (t_to - t_to_vor)
                          - alpha * (t_amb - t_to))
                 tn_deriv = rho[i] * area * cp_b[i] * (1 / dt) + alpha
@@ -453,8 +452,8 @@ def calc_derived_values_numba(node_pit, from_nodes, to_nodes):
     for i in range(le):
         fn = from_nodes[i]
         tn = to_nodes[i]
-        tinit_branch[i] = (node_pit[fn, TINIT_NODE] + node_pit[tn, TINIT_NODE]) / 2
-        height_difference[i] = node_pit[fn, HEIGHT] - node_pit[tn, HEIGHT]
-        p_init_i_abs[i] = node_pit[fn, PINIT] + node_pit[fn, PAMB]
-        p_init_i1_abs[i] = node_pit[tn, PINIT] + node_pit[tn, PAMB]
+        tinit_branch[i] = (node_pit[fn, IdxNode.TINIT] + node_pit[tn, IdxNode.TINIT]) / 2
+        height_difference[i] = node_pit[fn, IdxNode.HEIGHT] - node_pit[tn, IdxNode.HEIGHT]
+        p_init_i_abs[i] = node_pit[fn, IdxNode.PINIT] + node_pit[fn, IdxNode.PAMB]
+        p_init_i1_abs[i] = node_pit[tn, IdxNode.PINIT] + node_pit[tn, IdxNode.PAMB]
     return tinit_branch, height_difference, p_init_i_abs, p_init_i1_abs

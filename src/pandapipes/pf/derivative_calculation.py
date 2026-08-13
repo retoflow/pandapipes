@@ -1,8 +1,7 @@
 import numpy as np
 from pandapipes.constants import NORMAL_TEMPERATURE
-from pandapipes.idx_branch import (LENGTH, D, K, RE, LAMBDA, FROM_NODE, TO_NODE, TOUTINIT,
-                                   MDOTINIT, DP_FRICT_LOSS)
-from pandapipes.idx_node import TINIT as TINIT_NODE
+from pandapipes.idx_branch import IdxBranch
+from pandapipes.idx_node import IdxNode
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected, _sum_by_group
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
 from pandapipes.properties.fluids import get_fluid
@@ -36,8 +35,8 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
     friction_model = options["friction_model"]
 
     b_pit = branch_pit_slice
-    from_nodes = b_pit[:, FROM_NODE].astype(np.int32)
-    to_nodes = b_pit[:, TO_NODE].astype(np.int32)
+    from_nodes = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+    to_nodes = b_pit[:, IdxBranch.TO_NODE].astype(np.int32)
     tinit_branch, height_difference, p_init_i_abs, p_init_i1_abs = get_derived_values(
         node_pit, from_nodes, to_nodes, options["use_numba"])
 
@@ -49,13 +48,13 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
     rho = get_branch_real_density(fluid, node_pit, b_pit)
     eta = get_branch_real_eta(fluid, node_pit, b_pit, p_m)
 
-    area = np.pi * (b_pit[:, D] / 2) ** 2
-    lambda_, re = calc_lambda(b_pit[:, MDOTINIT], eta, b_pit[:, D], b_pit[:, K], gas_mode,
-        friction_model, b_pit[:, LENGTH], options, area)
-    der_lambda = calc_der_lambda(b_pit[:, MDOTINIT], eta, b_pit[:, D], b_pit[:, K], friction_model,
-                                 lambda_, area, re, b_pit[:, LENGTH])
-    b_pit[:, RE]     = re
-    b_pit[:, LAMBDA] = lambda_
+    area = np.pi * (b_pit[:, IdxBranch.D] / 2) ** 2
+    lambda_, re = calc_lambda(b_pit[:, IdxBranch.MDOTINIT], eta, b_pit[:, IdxBranch.D], b_pit[:, IdxBranch.K], gas_mode,
+        friction_model, b_pit[:, IdxBranch.LENGTH], options, area)
+    der_lambda = calc_der_lambda(b_pit[:, IdxBranch.MDOTINIT], eta, b_pit[:, IdxBranch.D], b_pit[:, IdxBranch.K], friction_model,
+                                 lambda_, area, re, b_pit[:, IdxBranch.LENGTH])
+    b_pit[:, IdxBranch.RE]     = re
+    b_pit[:, IdxBranch.LAMBDA] = lambda_
 
     if not gas_mode:
         load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss = (
@@ -70,7 +69,7 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
             derivatives_hydraulic_comp(node_pit, b_pit, lambda_, der_lambda, p_init_i_abs, p_init_i1_abs,
                 height_difference, comp_fact, der_comp, der_comp1, rho, rho_n))
 
-    b_pit[:, DP_FRICT_LOSS] = dp_frict_loss
+    b_pit[:, IdxBranch.DP_FRICT_LOSS] = dp_frict_loss
 
     return df_dm, df_dp, df_dp1, df_dm_nodes, load_vec, load_vec_nodes_from, load_vec_nodes_to
 
@@ -95,9 +94,9 @@ def calculate_derivatives_branch_thermal(net, branch_pit_slice, node_pit, branch
 
     from_nodes = get_from_nodes_corrected(b_pit)
     to_nodes = get_to_nodes_corrected(b_pit)
-    t_init_i = node_pit[from_nodes, TINIT_NODE]
-    t_init_i1 = b_pit[:, TOUTINIT]
-    t_init_nt = node_pit[to_nodes, TINIT_NODE]
+    t_init_i = node_pit[from_nodes, IdxNode.TINIT]
+    t_init_i1 = b_pit[:, IdxBranch.TOUTINIT]
+    t_init_nt = node_pit[to_nodes, IdxNode.TINIT]
     cp_b = get_branch_cp(fluid, node_pit, b_pit)
     cp_i1 = fluid.get_heat_capacity(t_init_i1)
     cp_nt = fluid.get_heat_capacity(t_init_nt)
@@ -133,8 +132,8 @@ def calculate_derivatives_node_thermal(net, branch_pit, node_pit, node_pit_old, 
     fluid = get_fluid(net)
     from_nodes = get_from_nodes_corrected(branch_pit)
     to_nodes = get_to_nodes_corrected(branch_pit)
-    t_init_i = node_pit[from_nodes, TINIT_NODE]
-    t_init_n = node_pit[:, TINIT_NODE]
+    t_init_i = node_pit[from_nodes, IdxNode.TINIT]
+    t_init_n = node_pit[:, IdxNode.TINIT]
     cp_b = get_branch_cp(fluid, node_pit, branch_pit)
     rho = get_branch_real_density(fluid, node_pit, branch_pit)
     transient = get_net_option(net, "transient")
