@@ -189,7 +189,7 @@ def set_user_pf_options(net, reset=False, **kwargs):
     if reset or 'user_pf_options' not in net.keys():
         net['user_pf_options'] = dict()
 
-    additional_kwargs = set(kwargs.keys()) - set(default_options.keys()) - {"fluid", "hyd_flag"}
+    additional_kwargs = set(kwargs.keys()) - set(default_options.keys()) - {"fluid"}
     if len(additional_kwargs) > 0:
         logger.info('parameters %s are not in the list of standard options'
                     % list(additional_kwargs))

@@ -2,7 +2,7 @@
 # and Energy System Technology (IEE), Kassel, and University of Kassel. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
-from pandapipes.pf.calculation import HydraulicCalculation, ThermalCalculation, BidirectionalCalculation
+from pandapipes.pf.calculation import execute_heat, execute_hydraulics, execute_bidirectional
 from pandapipes.pf.pipeflow_setup import (
     get_net_option, init_options, create_lookups, initialize_pit, init_all_result_tables,
 
@@ -83,31 +83,3 @@ def execute_pipeflow(net):
             execute_hydraulics(net)
         if calculate_heat:
             execute_heat(net)
-
-def execute_hydraulics(net):
-    calc = HydraulicCalculation()
-    calc.run(net)
-    if net.converged:
-        calc.on_converged(net)
-        calc.rerun(net)
-    if not net.converged:
-        calc.handle_non_convergence()
-    calc.extract_results(net)
-
-
-def execute_heat(net):
-    calc = ThermalCalculation()
-    calc.run(net)
-    if net.converged:
-        calc.rerun(net)
-    if not net.converged:
-        calc.handle_non_convergence()
-    calc.extract_results(net)
-
-
-def execute_bidirectional(net):
-    calc = BidirectionalCalculation()
-    calc.run(net)
-    if not net.converged:
-        calc.handle_non_convergence()
-    calc.extract_results(net)

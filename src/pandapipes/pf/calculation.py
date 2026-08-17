@@ -10,7 +10,7 @@ from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
 from pandapipes.pf.system_index import HydraulicSystemIndex, HeatSystemIndex, ComponentRegistry
 from pandapipes.pf.pipeflow_setup import (
-    get_net_options, get_net_option, get_lookup, reduce_pit, set_user_pf_options, create_internal_results,
+    get_net_options, get_net_option, get_lookup, reduce_pit, create_internal_results,
     identify_active_nodes_branches, hydraulic_slack_mask, heat_transfer_slack_mask, set_net_option,
     check_infeed_number, compute_infeed_nodes, write_internal_results, PipeflowNotConverged
 )
@@ -23,6 +23,36 @@ except ImportError:
     import logging
 
 logger = logging.getLogger(__name__)
+
+
+
+def execute_hydraulics(net):
+    calc = HydraulicCalculation()
+    calc.run(net)
+    if net.converged:
+        calc.on_converged(net)
+        calc.rerun(net)
+    if not net.converged:
+        calc.handle_non_convergence()
+    calc.extract_results(net)
+
+
+def execute_heat(net):
+    calc = ThermalCalculation()
+    calc.run(net)
+    if net.converged:
+        calc.rerun(net)
+    if not net.converged:
+        calc.handle_non_convergence()
+    calc.extract_results(net)
+
+
+def execute_bidirectional(net):
+    calc = BidirectionalCalculation()
+    calc.run(net)
+    if not net.converged:
+        calc.handle_non_convergence()
+    calc.extract_results(net)
 
 
 class Calculation:
@@ -195,9 +225,6 @@ class HydraulicCalculation(Calculation):
 
     def solve_step(self, net):
         return solve_hydraulics(net)
-
-    def on_converged(self, net):
-        set_user_pf_options(net, hyd_flag=True)
 
     def rerun(self, net):
         rerun = False
