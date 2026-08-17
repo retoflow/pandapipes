@@ -7,14 +7,13 @@ from numpy import dtype
 
 from pandapipes.component_models.abstract_models import BranchWOInternalsComponent
 from pandapipes.component_models.component_toolbox import (
-    build_pit_entries, standard_branch_wo_internals_result_lookup, get_component_array,
+    build_pit_entries, standard_branch_wo_internals_result_lookup
 )
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.derivative_calculation import (
     calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal,
 )
-from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup, get_net_option
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
 from pandapipes.pf.system_index import (

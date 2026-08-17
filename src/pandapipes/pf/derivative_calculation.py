@@ -282,11 +282,21 @@ def calc_der_lambda(m, eta, d, k, friction_model, lambda_pipe, area, re, lengths
         param = (k[pos] / (3.7 * d[pos]) + 5.74 * ((eta[pos] * area[pos]) / (np.abs(m[pos]) * d[pos])) ** 0.9)
         # 0.5 / (log(10) * log(param)^3 * param) * 5.166 * abs(eta)^0.9  / (abs(rho * d)^0.9
         # * abs(v_corr)^1.9)
-        lambda_der[pos] = 0.5 * np.log(10) ** 2 / (np.log(param) ** 3) / param * 5.166 * (
+        # lambda_swamee_jain is a function of |m| only, so d(lambda)/dm picks up a d|m|/dm =
+        # sign(m) chain-rule factor - verified against finite differences of calc_lambda(...,
+        # friction_model="swamee-jain") for both signs of m (see git history); a previous version
+        # of this branch omitted it, returning the same value for m < 0 as for m > 0 instead of
+        # flipping its sign.
+        lambda_der[pos] = np.sign(m[pos]) * 0.5 * np.log(10) ** 2 / (np.log(param) ** 3) / param * 5.166 * (
                     (eta[pos] * area[pos]) / (d[pos])) ** 0.9 * np.abs(m[pos]) ** -1.9
         return lambda_der
     else:
-        lambda_der[pos] = -(64 * eta[pos] * area[pos]) / (m[pos] ** 2 * d[pos])
+        # lambda_laminar = 64/Re = 64*eta*area/(|m|*d), so d(lambda_laminar)/dm carries a
+        # sign(m) factor from d(1/|m|)/dm = -sign(m)/m**2 - verified against finite differences
+        # of calc_lambda(..., friction_model=None/"nikuradse") for both signs of m (see git
+        # history); a previous version of this branch omitted sign(m), returning the m > 0 value
+        # unchanged for m < 0 instead of flipping its sign.
+        lambda_der[pos] = -np.sign(m[pos]) * (64 * eta[pos] * area[pos]) / (m[pos] ** 2 * d[pos])
         return lambda_der
 
 

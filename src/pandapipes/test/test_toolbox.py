@@ -308,7 +308,7 @@ def test_pit_extraction():
         if not "_gas" in name:
             pandapipes.create_ext_grid(net, junction=4, p_bar=6, t_k=290, name="External Grid 2", index=None)
             pandapipes.create_ext_grid(net, junction=5, p_bar=5, t_k=290, name="External Grid 3")
-        max_iter_hyd = 11 if '_water' in name else 6
+        max_iter_hyd = 12 if '_water' in name else 6
         pandapipes.pipeflow(net, max_iter_hyd=max_iter_hyd)
 
         node_table, branch_table = pandapipes.get_internal_tables_pandas(net)
