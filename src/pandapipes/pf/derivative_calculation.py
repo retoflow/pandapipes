@@ -266,16 +266,28 @@ def calc_der_lambda(m, eta, d, k, friction_model, lambda_pipe, area, re, lengths
 
     if friction_model == "colebrook":
         pos &= ~np.isclose(lengths, 0, rtol=1e-10, atol=1e-11)
-        b_term[pos] = (2.51 * eta[pos] * area[pos] / (m[pos] * d[pos] * np.sqrt(lambda_pipe[pos])) + k[pos] / (
+        m_abs = np.abs(m)
+        # b_term is "2.51/(Re*sqrt(lambda)) + k/(3.71*d)" from the colebrook-white implicit
+        # equation F(lambda, m) = 0 (see colebrook_white_implicit/colebrook_white); Re is defined
+        # via |m| (see calc_lambda_nikuradse_*_np's own re = m_abs*d/(eta*area)), so this needs
+        # m_abs here too, not signed m - a previous version used signed m, which is only correct
+        # for m > 0 and flips b_term's first term to the wrong sign for m < 0.
+        b_term[pos] = (2.51 * eta[pos] * area[pos] / (m_abs[pos] * d[pos] * np.sqrt(lambda_pipe[pos])) + k[pos] / (
                     3.71 * d[pos]))
 
-        df_dm[pos] = -2 * 2.51 * eta[pos] * area[pos] / (m[pos] ** 2 * np.sqrt(lambda_pipe[pos]) * d[pos]) / (
-                    np.log(10) * b_term[pos])
+        # dF/dm - the 1/|m| term in b_term contributes a sign(m) chain-rule factor (d|m|/dm); a
+        # previous version omitted it, same class of bug as the "nikuradse"/"swamee-jain" branches
+        # below.
+        df_dm[pos] = -np.sign(m[pos]) * 2 * 2.51 * eta[pos] * area[pos] / (
+                    m[pos] ** 2 * np.sqrt(lambda_pipe[pos]) * d[pos]) / (np.log(10) * b_term[pos])
 
-        df_dlambda[pos] = -0.5 * lambda_pipe[pos] ** (-3 / 2) - (2.51 * eta[pos] * area[pos] / (d[pos] * m[pos])) * \
+        df_dlambda[pos] = -0.5 * lambda_pipe[pos] ** (-3 / 2) - (2.51 * eta[pos] * area[pos] / (d[pos] * m_abs[pos])) * \
                           lambda_pipe[pos] ** (-3 / 2) / (np.log(10) * b_term[pos])
 
-        lambda_der[pos] = df_dm[pos] / df_dlambda[pos]
+        # implicit function theorem: F(lambda(m), m) = 0 => dlambda/dm = -(dF/dm)/(dF/dlambda) -
+        # a previous version omitted the leading minus sign, verified against finite differences
+        # of calc_lambda(..., friction_model="colebrook") for both signs of m (see git history).
+        lambda_der[pos] = -df_dm[pos] / df_dlambda[pos]
 
         return lambda_der
     elif friction_model == "swamee-jain":
