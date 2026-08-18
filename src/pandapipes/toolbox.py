@@ -546,7 +546,7 @@ def check_pressure_controllability(net, to_junction, controlled_junction):
 
 
 pit_types = {IdxNode.P: "P", IdxNode.L: "L", IdxNode.T: "T", IdxNode.PC: "PC"}
-int_cols = ["FROM_NODE", "TO_NODE", "ELEMENT_IDX", "EXT_GRID_OCCURENCE", "EXT_GRID_OCCURENCE_T"]
+int_cols = ["FROM_NODE", "TO_NODE", "ELEMENT_IDX"]
 bool_cols = ["ACTIVE"]
 
 

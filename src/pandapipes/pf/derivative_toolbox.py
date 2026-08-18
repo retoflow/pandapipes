@@ -66,25 +66,26 @@ def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_i
     tm = (node_pit[from_nodes, IdxNode.TINIT] + branch_pit[:, IdxBranch.TOUTINIT]) / 2
     const_height = rho * GRAVITATION_CONSTANT * height_difference / P_CONVERSION
     friction_term = np.divide(lambda_ * branch_pit[:, IdxBranch.LENGTH], branch_pit[:, IdxBranch.D]) + branch_pit[:, IdxBranch.LOSS_COEFFICIENT]
-    normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n * (np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2) ** 2)
+    normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n)
+    const_term = normal_term / (np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2) ** 2
 
-    const_term_p = normal_term * m_init2 * friction_term * tm
+    const_term_p = const_term * m_init2 * friction_term * tm
     df_dp = 1. - const_term_p * p_sum_div * (der_comp - comp_fact * p_sum_div)
     df_dp1 = -1. - const_term_p * p_sum_div * (der_comp1 - comp_fact * p_sum_div)
 
-    const_term_m = normal_term * p_sum_div * tm * comp_fact
+    const_term_m = const_term * p_sum_div * tm * comp_fact
     df_dm = - const_term_m * (2 * m_abs_deriv * friction_term +
                             np.divide(der_lambda * branch_pit[:, IdxBranch.LENGTH] * m_init2, branch_pit[:, IdxBranch.D]))
     df_dm[np.isclose(m_init_abs, 0)] = 1.
 
     load_vec = p_diff + branch_pit[:, IdxBranch.PL] + const_height \
-               - normal_term * comp_fact * m_init2 * friction_term * p_sum_div * tm
+               - const_term * comp_fact * m_init2 * friction_term * p_sum_div * tm
 
     df_dm_nodes = np.ones_like(lambda_)
 
     load_vec_nodes_from = branch_pit[:, IdxBranch.MDOTINIT]
     load_vec_nodes_to = branch_pit[:, IdxBranch.MDOTINIT]
-    dp_frict_loss = normal_term * comp_fact * m_init2 * friction_term * p_sum_div * tm
+    dp_frict_loss = const_term * comp_fact * m_init2 * friction_term * p_sum_div * tm
 
     return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
 

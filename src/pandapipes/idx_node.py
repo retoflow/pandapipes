@@ -23,12 +23,12 @@ class IdxNode(metaclass=IndexMeta):
     PAMB = 6  # Ambient pressure in [bar]
     LOAD = 7
     LOAD_T = 8  # Heat power drawn in [W]
-    EXT_GRID_OCCURENCE = 9
-    EXT_GRID_OCCURENCE_T = 10
-    INFEED = 11
+    INFEED = 9
 
-    PINIT = 12
-    TINIT = 13
-    MDOTSLACKINIT = 14
+    PINIT = 10
+    TINIT = 11
+    MDOTSLACKINIT = 12
+    VAR_MASS_SLACK = 13  # a real ext_grid sits here - MDOTSLACKINIT may absorb residual mass;
+                         # otherwise (e.g. a circ_pump's own pressure-anchor node) it must be 0
 
-    node_cols = 15
+    node_cols = 14

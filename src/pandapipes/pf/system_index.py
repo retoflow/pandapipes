@@ -290,9 +290,18 @@ class BaseSystemIndex:
         self._blocks: dict = {}
         self._size: int = 0
 
+    def _block_key(self, key):
+        """Actual dict key ``_blocks`` is stored/looked-up under for variable/equation *key* -
+        overridable so subclasses can namespace keys (e.g. combined_pipeflow's
+        ``HydThermSystemIndex``, which needs ``HydVarEq.NODE`` and ``ThermVarEq.NODE`` to resolve
+        to different blocks despite being equal as plain strings). All of ``idx``/``_register``/
+        ``_register_sparse`` go through this, so overriding it here is enough - no need to
+        separately override each of them."""
+        return key
+
     def idx(self, var, subset: np.ndarray | None = None) -> np.ndarray:
         """Matrix index for variable/equation *var* (optionally filtered to *subset* positions)."""
-        arr = self._blocks[var]
+        arr = self._blocks[self._block_key(var)]
         return arr if subset is None else arr[subset]
 
     def size(self) -> int:
@@ -302,9 +311,22 @@ class BaseSystemIndex:
     def _register(self, key, indices: np.ndarray) -> None:
         """Register a variable or equation block and update _size."""
         idx = indices.astype(np.int32)
-        self._blocks[key] = idx
+        self._blocks[self._block_key(key)] = idx
         if len(idx):
             self._size = max(self._size, int(idx[-1]) + 1)
+
+    def _register_sparse(self, key, full_size: int, node_indices: np.ndarray,
+                         values: np.ndarray) -> None:
+        """Register a variable/equation block that only exists for a SUBSET of nodes (e.g.
+        MDOTSLACKINIT/SLACK, only defined at P-type nodes) - but size it like the FULL node
+        array (``full_size``), with -1 at every position outside ``node_indices``. This lets
+        ``idx(key, some_node_indices)`` be called with raw node indices directly, exactly like
+        PINIT/NODE, instead of requiring callers to translate to a rank-within-subset first."""
+        arr = np.full(full_size, -1, dtype=np.int32)
+        arr[node_indices] = values
+        self._blocks[self._block_key(key)] = arr
+        if len(values):
+            self._size = max(self._size, int(values.max()) + 1)
 
 
 class HydraulicSystemIndex(BaseSystemIndex):
@@ -317,6 +339,12 @@ class HydraulicSystemIndex(BaseSystemIndex):
         len_n+len_b .. ...       MDOTSLACKINIT / SLACK  slack-mass variables (P-type nodes)
 
     ``slack_nodes`` is the sorted array of node_pit row indices with NODE_TYPE == P.
+
+    ``MDOTSLACKINIT``/``SLACK`` only exist at P-type nodes, but are sized like the full node
+    array (with -1 at every non-slack position) so ``idx(HydVarEq.MDOTSLACKINIT, some_nodes)``
+    works with raw node indices directly, same as ``PINIT``/``NODE`` - a caller (e.g. ExtGrid,
+    CirculationPump) never needs to translate its own node indices into a rank-within-slack_nodes
+    first, it just needs to know which of ITS OWN nodes are P-type slack nodes at all.
     """
 
     def __init__(self, node_pit: np.ndarray, branch_pit: np.ndarray) -> None:
@@ -326,16 +354,15 @@ class HydraulicSystemIndex(BaseSystemIndex):
         len_n = len(node_pit)
         len_b = len(branch_pit)
         len_s = len(self.slack_nodes)
+        slack_vals = np.arange(len_s, dtype=np.int32) + len_n + len_b
 
         self._register(HydVarEq.PINIT,    np.arange(len_n))
         self._register(HydVarEq.MDOTINIT, np.arange(len_b) + len_n)
-        if len_s:
-            self._register(HydVarEq.MDOTSLACKINIT, np.arange(len_s) + len_n + len_b)
+        self._register_sparse(HydVarEq.MDOTSLACKINIT, len_n, self.slack_nodes, slack_vals)
 
         self._register(HydVarEq.NODE,    np.arange(len_n))
         self._register(HydVarEq.BRANCH, np.arange(len_b) + len_n)
-        if len_s:
-            self._register(HydVarEq.SLACK, np.arange(len_s) + len_n + len_b)
+        self._register_sparse(HydVarEq.SLACK, len_n, self.slack_nodes, slack_vals)
 
 
 class HeatSystemIndex(BaseSystemIndex):

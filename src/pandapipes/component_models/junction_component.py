@@ -97,8 +97,8 @@ class Junction(NodeComponent):
         else:
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [IdxNode.EXT_GRID_OCCURENCE, IdxNode.EXT_GRID_OCCURENCE_T, IdxNode.LOAD, IdxNode.TINIT, IdxNode.PINIT],
-                [0., 0., 0., junctions.tfluid_k.values, junctions.pn_bar.values],
+                [IdxNode.TINIT, IdxNode.PINIT],
+                [junctions.tfluid_k.values, junctions.pn_bar.values],
             )))
 
     @classmethod

@@ -91,31 +91,50 @@ class ExtGrid(NodeElementComponent):
         ), mode=PitWriteMode.MEAN))
         registry.add_override(PitEntries(*build_pit_entries(
             index_p,
-            [IdxNode.EXT_GRID_OCCURENCE],
+            [IdxNode.VAR_MASS_SLACK],
             [1.]),
-            mode=PitWriteMode.ADDITIVE))
-        registry.add_override(PitEntries(*build_pit_entries(
-            index_t,
-            [IdxNode.EXT_GRID_OCCURENCE_T],
-            [1.]),
-            mode=PitWriteMode.ADDITIVE))
+            mode=PitWriteMode.UNIQUE))
 
     @classmethod
     def register_hydraulic_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
-        slack_nodes = sys_idx.slack_nodes  # all P-type node_pit rows, sorted
-        if not len(slack_nodes):
+        # register only for nodes that actually have an active ext_grid row - NOT every P-type
+        # node in the system (a circ_pump also marks its own flow junction as NODE_TYPE=P purely
+        # to anchor a pressure reference; that node is none of ExtGrid's business - it's handled
+        # by CirculationPump._register_slack_equations instead, using the VAR_MASS_SLACK flag
+        # written below to know whether a real ext_grid also sits there). ext_grid ALWAYS
+        # provides genuine mass-slack capability - no VAR_MASS_SLACK check needed on this side.
+        ext_grids = net[cls.table_name()]
+        ext_grids = ext_grids[ext_grids[cls.active_identifier()].values]
+        p_grids = ext_grids[np.isin(ext_grids.type.values, ["p", "pt"])]
+        if not len(p_grids):
             return
 
-        ranks = np.arange(len(slack_nodes), dtype=np.int32)
+        # "index_active_hydraulics" (not the plain "index" lookup!) maps onto the ACTIVE/reduced
+        # pit register_hydraulic_equations operates on here - the plain lookup is for the full
+        # pit, used by register_pit_node_entries before reduction; using it here would index into
+        # the wrong (larger) array and either crash or silently hit the wrong node. -1 means
+        # disconnected (dropped from the active pit) - skip those, same as register_thermal_equations.
+        junction_lookup = get_lookup(net, "node", "index_active_hydraulics")[
+            cls.get_connected_node_type().table_name()]
+        # one entry per ext_grid ROW - deliberately NOT deduplicated by node (see below: multiple
+        # ext_grids at the same node each contribute their own additive share to MDOTSLACKINIT)
+        eg_nodes = junction_lookup[p_grids[cls.get_node_col()].values].astype(np.int32)
+        eg_nodes = eg_nodes[eg_nodes != -1]
+        if not len(eg_nodes):
+            return
 
-        # variables
-        p_col     = sys_idx.idx(HydVarEq.PINIT,         slack_nodes)
-        slack_col = sys_idx.idx(HydVarEq.MDOTSLACKINIT, ranks)
+        # variables - MDOTSLACKINIT/SLACK are indexed by raw node index too (like PINIT/NODE),
+        # no rank-within-slack_nodes translation needed (see HydraulicSystemIndex)
+        p_col     = sys_idx.idx(HydVarEq.PINIT,         eg_nodes)
+        slack_col = sys_idx.idx(HydVarEq.MDOTSLACKINIT, eg_nodes)
 
         # equation position slack
-        slack_eq = sys_idx.idx(HydVarEq.SLACK, ranks)
+        slack_eq = sys_idx.idx(HydVarEq.SLACK, eg_nodes)
 
-        # system matrix slack: pressure fix — δPINIT = 0 (override)
+        # system matrix slack: pressure fix — δPINIT = 0. Registered once per ext_grid ROW (not
+        # deduplicated by node) with MEAN: several ext_grids at the same junction all target the
+        # same row, and MEAN lets them coexist there peacefully (also with a circ_pump's own
+        # pressure fix, if co-located) instead of UNIQUE's exclusive-ownership conflict check.
         rows_slack = slack_eq.astype(np.int32)
         cols_slack = p_col.astype(np.int32)
         data_slack = np.ones(len(slack_eq), dtype=np.float64)
@@ -123,14 +142,21 @@ class ExtGrid(NodeElementComponent):
         load_slack = np.zeros(len(slack_eq), dtype=np.float64)
 
         # equation position node
-        n_eq = sys_idx.idx(HydVarEq.NODE, slack_nodes)
+        n_eq = sys_idx.idx(HydVarEq.NODE, eg_nodes)
 
-        # system matrix node: MDOTSLACKINIT participates in mass balance
+        # system matrix node: MDOTSLACKINIT participates in mass balance - free to absorb
+        # whatever residual the rest of the network leaves over, exactly the point of a real
+        # ext_grid (unlike a circ_pump's own anchor node, see CirculationPump). Also registered
+        # once per ext_grid ROW (not deduplicated): N ext_grids at the same node each add their
+        # own +1 coefficient to that SAME row, so the row's total coefficient becomes N and
+        # Newton solves directly for MDOTSLACKINIT = (whatever the rest of the network leaves
+        # over) / N - each ext_grid's own share, with no separate averaging step needed in
+        # extract_results.
         rows_node = n_eq.astype(np.int32)
         cols_node = slack_col.astype(np.int32)
         data_node = np.ones(len(n_eq), dtype=np.float64)
         load_rows_node = n_eq.astype(np.int32)
-        load_node = node_pit[slack_nodes, IdxNode.MDOTSLACKINIT].astype(np.float64)
+        load_node = node_pit[eg_nodes, IdxNode.MDOTSLACKINIT].astype(np.float64)
 
         registry.add(ComponentEquations(
             rows=rows_slack,
@@ -138,7 +164,7 @@ class ExtGrid(NodeElementComponent):
             data=data_slack,
             load_rows=load_rows_slack,
             load_data=load_slack,
-            mode=EqWriteMode.UNIQUE,
+            mode=EqWriteMode.MEAN,
         ))
 
         registry.add(ComponentEquations(
@@ -239,11 +265,11 @@ class ExtGrid(NodeElementComponent):
         # get indices in internal structure for junctions in ext_grid tables which are "active"
         eg_nodes = get_lookup(net, "node", "index")[cls.get_connected_node_type().table_name()][
             junction[p_grids]]
-        node_uni, inverse_nodes, counts = np.unique(eg_nodes, return_counts=True, return_inverse=True)
-        sum_mass_flows = node_pit[node_uni, IdxNode.MDOTSLACKINIT]
 
         # positive results mean that the ext_grid feeds in, negative means that the ext grid
-        # extracts (like a load)
-        res_table["mdot_kg_per_s"].values[p_grids] = \
-            cls.sign() * (sum_mass_flows / counts)[inverse_nodes]
+        # extracts (like a load). MDOTSLACKINIT already IS this ext_grid's own share (see
+        # register_hydraulic_equations: N co-located ext_grids each add their own +1 coefficient
+        # to the same row, so Newton solves directly for the per-instance value) - no separate
+        # averaging needed here.
+        res_table["mdot_kg_per_s"].values[p_grids] = cls.sign() * node_pit[eg_nodes, IdxNode.MDOTSLACKINIT]
         return res_table, ext_grids, node_pit, branch_pit
