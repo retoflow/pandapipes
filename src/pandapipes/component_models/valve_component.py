@@ -177,11 +177,10 @@ class Valve(BranchWInternalsComponent):
 
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [IdxBranch.FROM_NODE, IdxBranch.TO_NODE, IdxBranch.LENGTH, IdxBranch.K, IdxBranch.TEXT, IdxBranch.ALPHA],
+                [IdxBranch.FROM_NODE, IdxBranch.TO_NODE, IdxBranch.K, IdxBranch.TEXT],
                 [from_nodes.astype(float), to_nodes.astype(float),
-                 np.zeros(len(rows)), np.full(len(rows), 1e-3),
-                 np.full(len(rows), get_net_option(net, 'ambient_temperature')),
-                 np.zeros(len(rows))],
+                 np.full(len(rows), 1e-3),
+                 np.full(len(rows), get_net_option(net, 'ambient_temperature'))],
             )))
 
         # TOUTINIT — always set (not conditional on transient)
