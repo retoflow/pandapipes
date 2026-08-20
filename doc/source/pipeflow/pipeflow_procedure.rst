@@ -98,9 +98,9 @@ The functions used to create the internal pit and extract results back from it a
 
 .. autofunction:: pandapipes.pf.pipeflow_setup.reduce_pit
 
-.. autofunction:: pandapipes.pf.result_extraction.extract_results_active_pit_hydraulics
-
-.. autofunction:: pandapipes.pf.result_extraction.extract_results_active_pit_heat_transfer
+Results are written back from the internal pit via
+:func:`~pandapipes.pf.result_extraction.extract_results_active_pit_hydraulics` and
+:func:`~pandapipes.pf.result_extraction.extract_results_active_pit_heat_transfer`.
 
 
 .. _jacobian:
