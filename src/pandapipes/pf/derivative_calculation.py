@@ -6,7 +6,6 @@ from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nod
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
 from pandapipes.properties.fluids import get_fluid
 from pandapipes.properties.properties_toolbox import get_branch_real_density, get_branch_real_eta, get_branch_cp
-from scipy.optimize import newton
 
 
 def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
@@ -204,10 +203,12 @@ def calc_lambda(m, eta, d, k, gas_mode, friction_model, lengths, options, area):
     if options["use_numba"]:
         from pandapipes.pf.derivative_toolbox_numba import (
             calc_lambda_nikuradse_incomp_numba as calc_lambda_nikuradse_incomp,
-            calc_lambda_nikuradse_comp_numba as calc_lambda_nikuradse_comp)
+            calc_lambda_nikuradse_comp_numba as calc_lambda_nikuradse_comp,
+            colebrook_numba as colebrook)
     else:
         from pandapipes.pf.derivative_toolbox import (calc_lambda_nikuradse_incomp_np as calc_lambda_nikuradse_incomp,
-                                                      calc_lambda_nikuradse_comp_np as calc_lambda_nikuradse_comp)
+                                                      calc_lambda_nikuradse_comp_np as calc_lambda_nikuradse_comp,
+                                                      colebrook_np as colebrook)
     if gas_mode:
         re, lambda_laminar, lambda_nikuradse = calc_lambda_nikuradse_comp(m, d, k, eta, area)
     else:
@@ -218,7 +219,7 @@ def calc_lambda(m, eta, d, k, gas_mode, friction_model, lengths, options, area):
         from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
         max_iter = options.get("max_iter_colebrook", 100)
         tolerance = options.get("tolerance_colebrook", 1e-4)
-        converged, lambda_colebrook = colebrook_white(re, d, k, lambda_nikuradse, max_iter, lengths, tolerance)
+        converged, lambda_colebrook = colebrook(re, d, k, lambda_nikuradse, max_iter, lengths, tolerance)
         if not converged:
             raise PipeflowNotConverged("The Colebrook-White algorithm did not converge. There might be model "
                                        "inconsistencies. The maximum iterations can be given as 'max_iter_colebrook' "
@@ -268,7 +269,8 @@ def calc_der_lambda(m, eta, d, k, friction_model, lambda_pipe, area, re, lengths
         pos &= ~np.isclose(lengths, 0, rtol=1e-10, atol=1e-11)
         m_abs = np.abs(m)
         # b_term is "2.51/(Re*sqrt(lambda)) + k/(3.71*d)" from the colebrook-white implicit
-        # equation F(lambda, m) = 0 (see colebrook_white_implicit/colebrook_white); Re is defined
+        # equation F(lambda, m) = 0 (see colebrook_white_implicit/cw_derivative in
+        # derivative_toolbox.colebrook_np); Re is defined
         # via |m| (see calc_lambda_nikuradse_*_np's own re = m_abs*d/(eta*area)), so this needs
         # m_abs here too, not signed m - a previous version used signed m, which is only correct
         # for m > 0 and flips b_term's first term to the wrong sign for m < 0.
@@ -310,56 +312,3 @@ def calc_der_lambda(m, eta, d, k, friction_model, lambda_pipe, area, re, lengths
         # unchanged for m < 0 instead of flipping its sign.
         lambda_der[pos] = -np.sign(m[pos]) * (64 * eta[pos] * area[pos]) / (m[pos] ** 2 * d[pos])
         return lambda_der
-
-
-def colebrook_white(re, d, k, lambda_nikuradse, max_iter, lengths, tolerance=1e-4):
-    """
-    Function calculates the friction factor of a pipe using the Colebrook-White equation. It is an
-    implicit equation which is solved using the Newton-Raphson method. For pipes with zero flow or
-    zero length, the initial guess is returned. This should be uncritical, as the pressure loss
-    term will equal zero (lambda * u^2 * l / d).
-
-    :param re: Reynolds number [dimensionless]
-    :type re: np.array
-    :param d: Diameter [m]
-    :type d: np.array
-    :param k: Roughness [m]
-    :type k: np.array
-    :param lambda_nikuradse: Initial guess for lambda (from Nikuradse)
-    :type lambda_nikuradse: np.array
-    :param max_iter: Maximum number of iterations for the Colebrook-White calculation
-    :type max_iter: int
-    :param lengths: Length of the pipes [m] - only used to identify zero-length pipes
-    :type lengths: np.array
-    :param tolerance: Tolerance for the Colebrook-White calculation
-    :type tolerance: float
-    :return: lambda_cb, converged
-    1. lambda_cb: Friction factor according to Colebrook-White
-    2. converged: True, if the Colebrook-White calculation converged for all pipes
-    :rtype: (np.array, bool)
-    """
-
-    def colebrook_white_implicit(lambda_cb, re_nz, k_nz, d_nz):
-        return lambda_cb ** (-1 / 2) + 2 * np.log10(2.51 / (re_nz * np.sqrt(lambda_cb)) + k_nz / (3.71 * d_nz))
-
-    def cw_derivative(lambda_cb, re_nz, k_nz, d_nz):
-        return -1 / 2 * lambda_cb ** (-3 / 2) - (2.51 / re_nz) * lambda_cb ** (-3 / 2) / (
-                    np.log(10) * (2.51 / (re_nz * np.sqrt(lambda_cb)) + k_nz / (3.71 * d_nz)))
-
-    mask = ~np.isclose(re, 0) & ~np.isclose(lengths, 0, rtol=1e-10, atol=1e-11)
-    lambda_res = lambda_nikuradse
-
-    if not mask.any():
-        return True, lambda_res
-
-    res = newton(colebrook_white_implicit, lambda_res[mask], maxiter=max_iter, args=(re[mask], k[mask], d[mask]),
-                 tol=tolerance, full_output=True, fprime=cw_derivative)  # , fprime2=cw_derivative_2)
-
-    if lambda_res[mask].size == 1:
-        lambda_res[mask] = res[0]
-        converged = res[1].converged
-    else:
-        lambda_res[mask] = res.root
-        converged = np.all(res.converged)
-
-    return converged, lambda_res
