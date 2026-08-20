@@ -13,6 +13,17 @@ try:
 except ImportError:
     from pandapower.pf.no_numba import jit
 
+# numba's nopython mode can't type IdxBranch/IdxNode as globals (they're classes, see
+# pandapipes.idx.IndexMeta, not plain ints/modules) - bind the columns get_pressures_numba/
+# get_gas_vel_numba need as plain module-level ints, same fix as
+# pandapipes.pf.derivative_toolbox_numba, and reference these bare names inside those two
+# @jit(nopython=True) functions instead of the class attribute. Every other (non-jitted) function
+# in this module keeps using IdxBranch.X/IdxNode.X normally.
+BRANCH_FROM_NODE = IdxBranch.FROM_NODE
+BRANCH_TOUTINIT = IdxBranch.TOUTINIT
+NODE_TINIT = IdxNode.TINIT
+NODE_PAMB = IdxNode.PAMB
+
 
 def extract_all_results(net):
     """
@@ -136,8 +147,8 @@ def get_pressures_numba(node_pit, from_nodes, to_nodes, v_mps, p_from, p_to):
     p_abs_from, p_abs_to, p_abs_mean = [np.empty_like(v_mps) for _ in range(3)]
 
     for i in range(len(v_mps)):
-        p_abs_from[i] = node_pit[from_nodes[i], IdxNode.PAMB] + p_from[i]
-        p_abs_to[i] = node_pit[to_nodes[i], IdxNode.PAMB] + p_to[i]
+        p_abs_from[i] = node_pit[from_nodes[i], NODE_PAMB] + p_from[i]
+        p_abs_to[i] = node_pit[to_nodes[i], NODE_PAMB] + p_to[i]
         if np.less_equal(np.abs(p_abs_from[i] - p_abs_to[i]), 1e-8 + 1e-5 * abs(p_abs_to[i])):
             p_abs_mean[i] = p_abs_from[i]
         else:
@@ -152,10 +163,10 @@ def get_gas_vel_numba(node_pit, branch_pit, comp_from, comp_to, comp_mean, p_abs
                       p_abs_mean, v_mps):
     v_gas_from, v_gas_to, v_gas_mean, normfactor_from, normfactor_to, normfactor_mean = \
         [np.empty_like(v_mps) for _ in range(6)]
-    from_nodes = branch_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
+    from_nodes = branch_pit[:, FROM_NODE].astype(np.int32)
     for i in range(len(v_mps)):
-        t_from = node_pit[from_nodes[i], IdxNode.TINIT]
-        t_to = branch_pit[i, IdxBranch.TOUTINIT]
+        t_from = node_pit[from_nodes[i], NODE_TINIT]
+        t_to = branch_pit[i, TOUTINIT]
         tm = (t_from + t_to) / 2
         numerator_from = np.divide(NORMAL_PRESSURE * t_from, NORMAL_TEMPERATURE)
         numerator_to = np.divide(NORMAL_PRESSURE * t_to, NORMAL_TEMPERATURE)
