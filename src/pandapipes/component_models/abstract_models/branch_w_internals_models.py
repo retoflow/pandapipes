@@ -180,11 +180,10 @@ class BranchWInternalsComponent(BranchComponent):
             else:
                 do_vals = d_vals.copy()
 
-            n = len(rows)
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [IdxBranch.ELEMENT_IDX, IdxBranch.ACTIVE, IdxBranch.D, IdxBranch.DO, IdxBranch.LOSS_COEFFICIENT, IdxBranch.QEXT],
-                [elem_idx_vals, active_vals, d_vals, do_vals, lc_vals, np.zeros(n)],
+                [IdxBranch.ELEMENT_IDX, IdxBranch.ACTIVE, IdxBranch.D, IdxBranch.DO, IdxBranch.LOSS_COEFFICIENT],
+                [elem_idx_vals, active_vals, d_vals, do_vals, lc_vals],
             )))
 
     @classmethod
