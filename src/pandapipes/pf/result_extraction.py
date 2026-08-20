@@ -163,10 +163,10 @@ def get_gas_vel_numba(node_pit, branch_pit, comp_from, comp_to, comp_mean, p_abs
                       p_abs_mean, v_mps):
     v_gas_from, v_gas_to, v_gas_mean, normfactor_from, normfactor_to, normfactor_mean = \
         [np.empty_like(v_mps) for _ in range(6)]
-    from_nodes = branch_pit[:, FROM_NODE].astype(np.int32)
+    from_nodes = branch_pit[:, BRANCH_FROM_NODE].astype(np.int32)
     for i in range(len(v_mps)):
         t_from = node_pit[from_nodes[i], NODE_TINIT]
-        t_to = branch_pit[i, TOUTINIT]
+        t_to = branch_pit[i, BRANCH_TOUTINIT]
         tm = (t_from + t_to) / 2
         numerator_from = np.divide(NORMAL_PRESSURE * t_from, NORMAL_TEMPERATURE)
         numerator_to = np.divide(NORMAL_PRESSURE * t_to, NORMAL_TEMPERATURE)
