@@ -44,10 +44,14 @@ class Compressor(Pump):
         component_pits[cls.table_name()] = compr_array
 
     @classmethod
-    def _compute_pl(cls, net, b_pit, node_pit, tbl_idx):
-        """Compute pressure lift from pressure_ratio and write into b_pit[:, PL]."""
+    def _compute_pl(cls, net, b_pit, node_pit):
+        """Compute pressure lift from pressure_ratio and write into b_pit[:, PL].
+
+        See Pump._compute_pl's docstring: compr_array is already row-aligned with b_pit through
+        get_component_array's own active_hydraulics filtering, so no separate index is needed.
+        """
         compr_array = get_component_array(net, cls.table_name())
-        pressure_ratio = compr_array[tbl_idx, cls.PRESSURE_RATIO]
+        pressure_ratio = compr_array[:, cls.PRESSURE_RATIO]
         from_nodes = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
         p_from = node_pit[from_nodes, IdxNode.PAMB] + node_pit[from_nodes, IdxNode.PINIT]
         pl_abs = p_from * pressure_ratio - p_from

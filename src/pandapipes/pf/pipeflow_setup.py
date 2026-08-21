@@ -392,6 +392,20 @@ def initialize_pit(net):
         if get_net_option(net, "mode") == "heat":
             if not "_pit" in net:
                 raise UserWarning("There are no hydraulic results given!")
+            # net.converged reflects the outcome of whichever hydraulics run last populated
+            # "_pit" (Calculation.run() sets it at the start and updates it every iteration of
+            # that SAME call, so it can't be stale from some unrelated, older run) - a caller that
+            # catches PipeflowNotConverged from a hydraulics run and continues (e.g. to keep
+            # processing a batch of nets) would otherwise silently get a standalone heat-transfer
+            # solve built on top of the unconverged, physically meaningless mdot/p values that
+            # non-convergent run still left behind, with a correct-looking net.converged=True
+            # from the heat run's OWN convergence masking that the underlying hydraulics never
+            # actually converged.
+            if not net.converged:
+                raise PipeflowNotConverged(
+                    "The hydraulic calculation has not converged - a standalone heat-transfer "
+                    "run cannot be based on its results. Run a converged hydraulics/sequential "
+                    "pipeflow first.")
             pit = net["_pit"]
         else:
             pit = create_empty_pit(net)

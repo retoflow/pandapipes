@@ -6,12 +6,15 @@ import numpy as np
 from numpy import dtype
 
 from pandapipes.component_models.abstract_models.circulation_pump import CirculationPump
-from pandapipes.component_models.component_toolbox import build_pit_entries
+from pandapipes.component_models.component_toolbox import (
+    build_pit_entries, get_thermal_options, register_branch_node_thermal_balance,
+    register_circ_pump_node_continuity, register_circ_pump_slack_equations,
+)
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.derivative_calculation import calculate_derivatives_branch_thermal
 from pandapipes.pf.internals_toolbox import get_to_nodes_corrected
-from pandapipes.pf.pipeflow_setup import get_lookup, get_net_option
+from pandapipes.pf.pipeflow_setup import get_lookup
 from pandapipes.pf.system_index import ComponentEquations, EqWriteMode, PitEntries, HydVarEq, ThermVarEq
 
 try:
@@ -68,8 +71,12 @@ class CirculationPumpMass(CirculationPump):
 
     @classmethod
     def register_hydraulic_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
-        cls._register_node_continuity(net, branch_pit, node_pit, sys_idx, registry)
-        cls._register_slack_equations(net, node_pit, sys_idx, registry)
+        register_circ_pump_node_continuity(net, branch_pit, sys_idx, registry, cls.table_name())
+        _, tn_col = cls.from_to_node_cols()
+        register_circ_pump_slack_equations(
+            net, node_pit, sys_idx, registry, cls.table_name(), cls.active_identifier(),
+            tn_col, cls.get_connected_node_type().table_name(),
+        )
 
         f, t = get_lookup(net, "branch", "from_to_active_hydraulics")[cls.table_name()]
         if f == t:
@@ -106,10 +113,9 @@ class CirculationPumpMass(CirculationPump):
             return
 
         branch_idx = np.arange(f, t, dtype=np.int32)
-        options = {"use_numba": get_net_option(net, "use_numba")}
         branch_pit_old = net["_active_old_pit"]["branch"]
         fnt, dfnt_dt, dfnt_dtout, _, _, _ = calculate_derivatives_branch_thermal(
-            net, branch_pit[f:t], node_pit, branch_pit_old[f:t], options
+            net, branch_pit[f:t], node_pit, branch_pit_old[f:t], get_thermal_options(net)
         )
 
         b_pit = branch_pit[f:t]
@@ -128,16 +134,6 @@ class CirculationPumpMass(CirculationPump):
         load_rows_branch = branch_eq.astype(np.int32)
         load_branch = np.zeros(len(branch_idx), dtype=np.float64)
 
-        # equation position node
-        tn_eq = sys_idx.idx(ThermVarEq.NODE, tn)
-
-        # system matrix node: node energy balance at the receiving (to) node
-        rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
-        cols_node = np.concatenate([tn_eq, t_out_col]).astype(np.int32)
-        data_node = np.concatenate([dfnt_dt, dfnt_dtout]).astype(np.float64)
-        load_rows_node = tn_eq.astype(np.int32)
-        load_node = fnt.astype(np.float64)
-
         registry.add_override(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
@@ -147,10 +143,9 @@ class CirculationPumpMass(CirculationPump):
             mode=EqWriteMode.UNIQUE,
         ))
 
-        registry.add(ComponentEquations(
-            rows=rows_node,
-            cols=cols_node,
-            data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
-        ))
+        # t_tn_col == the node equation's own row index here (ThermVarEq.NODE and ThermVarEq.TINIT
+        # share the same block in a square system, see HeatSystemIndex) - computed explicitly
+        # rather than reusing tn_eq, to match register_branch_node_thermal_balance's own signature
+        t_tn_col = sys_idx.idx(ThermVarEq.TINIT, tn)
+        register_branch_node_thermal_balance(sys_idx, registry, tn, t_tn_col, t_out_col,
+                                             dfnt_dt, dfnt_dtout, fnt)

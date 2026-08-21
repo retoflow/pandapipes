@@ -8,10 +8,10 @@ from pandapipes.component_models.abstract_models.branch_wo_internals_models impo
 from pandapipes.component_models.component_toolbox import build_pit_entries, standard_branch_wo_internals_result_lookup
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
-from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup, get_net_option
+from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
-from pandapipes.pf.system_index import ComponentEquations, EqWriteMode, PitEntries, PitWriteMode, HydVarEq
+from pandapipes.pf.system_index import PitEntries, PitWriteMode
 
 try:
     import pandaplan.core.pplog as logging
@@ -80,103 +80,6 @@ class CirculationPump(BranchWOInternalsComponent):
             tbl.t_flow_k.values,
             net[junction_table_name].loc[to_junctions, "tfluid_k"].values,
         )
-
-    @classmethod
-    def _register_slack_equations(cls, net, node_pit, sys_idx, registry):
-        """
-        A circ pump's own flow junction gets ``NODE_TYPE = P`` purely to anchor an absolute
-        pressure reference (pressure is only ever defined up to a constant otherwise) - it has
-        no genuine external connection to freely supply/absorb mass, unlike a real ext_grid.
-
-        So: the pressure-fix equation is always registered for its own flow junction (MEAN,
-        letting it coexist with ExtGrid's own pressure-fix there if a real ext_grid happens to
-        sit at the same node too - see ``ExtGrid.register_hydraulic_equations``). But
-        ``MDOTSLACKINIT`` is only forced to 0 there if there's no real ext_grid also present
-        (``VAR_MASS_SLACK``, set by ``ExtGrid.register_pit_node_entries``) - where one is,
-        ExtGrid's own registration already lets ``MDOTSLACKINIT`` freely absorb residual mass
-        there, and this must not fight it for ownership of that row.
-        """
-        tbl = net[cls.table_name()]
-        tbl = tbl[tbl[cls.active_identifier()].values]
-        if not len(tbl):
-            return
-
-        _, tn_col = cls.from_to_node_cols()
-        p_pumps = tbl[np.isin(tbl.type.values, ["p", "pt"])]
-        if not len(p_pumps):
-            return
-
-        # "index_active_hydraulics" (not the plain "index" lookup!) maps onto the ACTIVE/reduced
-        # pit this method operates on - see ExtGrid.register_hydraulic_equations for why the
-        # plain lookup is wrong here. -1 means disconnected - skip those.
-        junction_lookup = get_lookup(net, "node", "index_active_hydraulics")[
-            cls.get_connected_node_type().table_name()]
-        # one entry per circ_pump ROW - not deduplicated, mirrors ExtGrid's own pressure-fix
-        pump_nodes = junction_lookup[p_pumps[tn_col].values].astype(np.int32)
-        pump_nodes = pump_nodes[pump_nodes != -1]
-        if not len(pump_nodes):
-            return
-
-        p_col = sys_idx.idx(HydVarEq.PINIT, pump_nodes)
-        slack_eq = sys_idx.idx(HydVarEq.SLACK, pump_nodes)
-
-        registry.add(ComponentEquations(
-            rows=slack_eq.astype(np.int32),
-            cols=p_col.astype(np.int32),
-            data=np.ones(len(slack_eq), dtype=np.float64),
-            load_rows=slack_eq.astype(np.int32),
-            load_data=np.zeros(len(slack_eq), dtype=np.float64),
-            mode=EqWriteMode.MEAN,
-        ))
-
-        # Where a real ext_grid also sits (VAR_MASS_SLACK != 0), ExtGrid's own registration
-        # already adds MDOTSLACKINIT to this node's balance - skip those nodes entirely here,
-        # or the coefficient would double. Deduplicated by node (unlike the pressure-fix above):
-        # there is exactly one shared MDOTSLACKINIT unknown per node to reset/contribute to, not
-        # one share per pump instance.
-        force_zero = np.unique(pump_nodes[node_pit[pump_nodes, IdxNode.VAR_MASS_SLACK] == 0])
-        node_pit[force_zero, IdxNode.MDOTSLACKINIT] = 0.
-
-        n_eq = sys_idx.idx(HydVarEq.NODE, pump_nodes)
-        slack_col = sys_idx.idx(HydVarEq.MDOTSLACKINIT, pump_nodes)
-
-        # plain add() (ADDITIVE, default) - joins the node's genuine balance (pipe/sink flows,
-        # contributed by other components), does not replace or strip it
-        registry.add(ComponentEquations(
-            rows=n_eq.astype(np.int32),
-            cols=slack_col.astype(np.int32),
-            data=np.ones(len(n_eq), dtype=np.float64),
-            load_rows=n_eq.astype(np.int32),
-            load_data=node_pit[pump_nodes, IdxNode.MDOTSLACKINIT].astype(np.float64),  # == 0. now
-        ))
-
-    @classmethod
-    def _register_node_continuity(cls, net, branch_pit, node_pit, sys_idx, registry):
-        f, t = get_lookup(net, "branch", "from_to_active_hydraulics")[cls.table_name()]
-        if f == t:
-            return
-
-        branch_idx = np.arange(f, t, dtype=np.int32)
-        b_pit = branch_pit[f:t]
-        fn = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
-        tn = b_pit[:, IdxBranch.TO_NODE].astype(np.int32)
-
-        mdot_col = sys_idx.idx(HydVarEq.MDOTINIT, branch_idx)
-        fn_eq = sys_idx.idx(HydVarEq.NODE, fn)
-        tn_eq = sys_idx.idx(HydVarEq.NODE, tn)
-
-        dm_node = np.ones(len(branch_idx), dtype=np.float64)
-        m = b_pit[:, IdxBranch.MDOTINIT]
-        rows_node = np.concatenate([fn_eq, tn_eq])
-        cols_node = np.concatenate([mdot_col, mdot_col])
-        data_node = np.concatenate([-dm_node, dm_node])
-        load_rows_node = np.concatenate([fn_eq, tn_eq])
-        load_node = np.concatenate([-m, m])
-
-        registry.add(ComponentEquations(
-            rows_node.astype(np.int32), cols_node.astype(np.int32), data_node,
-            load_rows_node.astype(np.int32), load_node,
-        ))
 
     @classmethod
     def get_result_table(cls, net):

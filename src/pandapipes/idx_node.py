@@ -28,7 +28,7 @@ class IdxNode(metaclass=IndexMeta):
     PINIT = 10
     TINIT = 11
     MDOTSLACKINIT = 12
-    VAR_MASS_SLACK = 13  # a real ext_grid sits here - MDOTSLACKINIT may absorb residual mass;
+    COUNT_VAR_MASS_SLACK = 13  # a real ext_grid sits here - MDOTSLACKINIT may absorb residual mass;
                          # otherwise (e.g. a circ_pump's own pressure-anchor node) it must be 0
 
     node_cols = 14

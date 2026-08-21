@@ -7,12 +7,16 @@ import numpy as np
 from numpy import dtype
 
 from pandapipes.component_models.abstract_models import BranchWInternalsComponent
-from pandapipes.component_models.component_toolbox import build_pit_entries, vinterp, p_correction_height_air
+from pandapipes.component_models.component_toolbox import (
+    build_pit_entries, vinterp, p_correction_height_air, get_hydraulic_options, get_thermal_options,
+    register_branch_node_mass_balance, register_branch_node_thermal_balance,
+)
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
 from pandapipes.pf.derivative_calculation import calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal
+from pandapipes.pf.internals_toolbox import branch_area
 from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup, get_net_option, get_table_number
 from pandapipes.pf.result_extraction import extract_branch_results_with_internals, \
     extract_branch_results_without_internals
@@ -191,10 +195,8 @@ class Pipe(BranchWInternalsComponent):
         branch_idx = np.arange(f, t, dtype=np.int32)
         if not len(branch_idx):
             return
-        options = {"use_numba": get_net_option(net, "use_numba"),
-                   "friction_model": get_net_option(net, "friction_model")}
         df_dm, df_dp, df_dp1, df_dm_node, load, load_fn, load_tn = (
-            calculate_derivatives_hydraulic(net, branch_pit[f:t], node_pit, options)
+            calculate_derivatives_hydraulic(net, branch_pit[f:t], node_pit, get_hydraulic_options(net))
         )
 
         b_pit = branch_pit[f:t]
@@ -216,17 +218,6 @@ class Pipe(BranchWInternalsComponent):
         load_rows_branch = branch_eq.astype(np.int32)
         load_branch = load.astype(np.float64)
 
-        # equation position node
-        fn_eq      = sys_idx.idx(HydVarEq.NODE, fn)
-        tn_eq      = sys_idx.idx(HydVarEq.NODE, tn)
-
-        # system matrix node
-        rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
-        cols_node = np.concatenate([mdot_col, mdot_col]).astype(np.int32)
-        data_node = np.concatenate([-df_dm_node, df_dm_node]).astype(np.float64)
-        load_rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
-        load_node = np.concatenate([-load_fn, load_tn]).astype(np.float64)
-
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
@@ -235,13 +226,8 @@ class Pipe(BranchWInternalsComponent):
             load_data=load_branch,
         ))
 
-        registry.add(ComponentEquations(
-            rows=rows_node,
-            cols=cols_node,
-            data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
-        ))
+        register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm_node,
+                                          -load_fn, load_tn)
 
     @classmethod
     def register_thermal_equations(cls, net, branch_pit, node_pit,
@@ -251,10 +237,10 @@ class Pipe(BranchWInternalsComponent):
         branch_idx = np.arange(f, t, dtype=np.int32)
         if not len(branch_idx):
             return
-        options = {"use_numba": get_net_option(net, "use_numba")}
         branch_pit_old = net["_active_old_pit"]["branch"]
         fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout = (
-            calculate_derivatives_branch_thermal(net, branch_pit[f:t], node_pit, branch_pit_old[f:t], options)
+            calculate_derivatives_branch_thermal(net, branch_pit[f:t], node_pit, branch_pit_old[f:t],
+                                                 get_thermal_options(net))
         )
 
         pipe_pit = branch_pit[f:t]
@@ -276,16 +262,6 @@ class Pipe(BranchWInternalsComponent):
         load_rows_branch = branch_eq.astype(np.int32)
         load_branch = fb.astype(np.float64)
 
-        # equation position node
-        tn_eq = sys_idx.idx(ThermVarEq.NODE, tn)
-
-        # system matrix node
-        rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
-        cols_node = np.concatenate([t_tn_col, t_out_col]).astype(np.int32)
-        data_node = np.concatenate([dfnt_dt, dfnt_dtout]).astype(np.float64)
-        load_rows_node = tn_eq.astype(np.int32)
-        load_node = fnt.astype(np.float64)
-
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
@@ -294,13 +270,8 @@ class Pipe(BranchWInternalsComponent):
             load_data=load_branch,
         ))
 
-        registry.add(ComponentEquations(
-            rows=rows_node,
-            cols=cols_node,
-            data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
-        ))
+        register_branch_node_thermal_balance(sys_idx, registry, tn, t_tn_col, t_out_col,
+                                             dfnt_dt, dfnt_dtout, fnt)
 
     @classmethod
     def geodata(cls):
@@ -396,7 +367,7 @@ class Pipe(BranchWInternalsComponent):
             m_nodes = [np.arange(x, y + 1) for x,y in zip(m_nodes[:, 0], m_nodes[:, 1])]
 
             v_pipe_data = pipe_pit[m_nodes, IdxBranch.MDOTINIT] / fluid.get_density(NORMAL_TEMPERATURE) / (
-                np.pi * (pipe_pit[m_nodes, IdxBranch.D] / 2) ** 2)
+                branch_area(pipe_pit)[m_nodes])
             p_node_data = node_pit[p_nodes, IdxNode.PINIT]
             t_node_data = node_pit[p_nodes, IdxNode.TINIT]
 

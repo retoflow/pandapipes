@@ -9,12 +9,13 @@ import pandas as pd
 from numpy import dtype
 
 from pandapipes.component_models.abstract_models.node_models import NodeComponent
-from pandapipes.component_models.component_toolbox import build_pit_entries, p_correction_height_air
+from pandapipes.component_models.component_toolbox import (
+    build_pit_entries, p_correction_height_air, get_thermal_options,
+)
 from pandapipes.idx_node import IdxNode
 from pandapipes.pf.system_index import PitEntries, ComponentEquations, ThermVarEq
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_table_number, \
-    get_lookup
-from pandapipes.pf.pipeflow_setup import get_net_option
+    get_lookup, get_net_option
 
 
 class Junction(NodeComponent):
@@ -105,11 +106,10 @@ class Junction(NodeComponent):
     def register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry) -> None:
         from pandapipes.pf.derivative_calculation import calculate_derivatives_node_thermal
 
-        options = {"use_numba": get_net_option(net, "use_numba")}
         node_pit_old = net["_active_old_pit"]["node"]
 
         fn_node, dfn_dt = calculate_derivatives_node_thermal(
-            net, branch_pit, node_pit, node_pit_old, options
+            net, branch_pit, node_pit, node_pit_old, get_thermal_options(net)
         )
 
         stagnant = np.where(dfn_dt != 0)[0].astype(np.int32)

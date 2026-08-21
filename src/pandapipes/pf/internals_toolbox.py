@@ -18,6 +18,20 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def branch_area(branch_pit):
+    """Pipe cross-sectional area (pi*(D/2)**2) per branch row - a pure function of D, deliberately
+    NOT cached as its own pit column (that AREA column existed once and was removed, see git
+    history "remove area and scale jacobi matrix"): D can change mid-solve (e.g. optimize_dn's
+    diameter sizing mutates it every outer iteration), and a cached AREA column would need to be
+    kept in perfect sync everywhere D is written, or silently go stale - a correctness hazard
+    worse than the recompute it would save. Callers that need this more than once within the same
+    computation (e.g. calculate_derivatives_hydraulic, which uses it for both calc_lambda and its
+    own const_term) should call this once and pass the result along, rather than recomputing the
+    formula inline at each use site - that repeated-inline-formula pattern is what this function
+    replaces."""
+    return np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2
+
+
 def _sum_by_group_sorted(indices, *values):
     """Auxiliary function to sum up values by some given indices (both as numpy arrays). Expects the
     indices and values to already be sorted.

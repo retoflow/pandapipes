@@ -3,7 +3,7 @@ import numpy as np
 from pandapipes.constants import NORMAL_PRESSURE, NORMAL_TEMPERATURE
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
-from pandapipes.pf.internals_toolbox import _sum_by_group
+from pandapipes.pf.internals_toolbox import _sum_by_group, branch_area
 from pandapipes.pf.pipeflow_setup import get_table_number, get_lookup, get_net_option
 from pandapipes.properties.fluids import get_fluid
 from pandapipes.properties.properties_toolbox import get_branch_real_density
@@ -73,7 +73,7 @@ def get_basic_branch_results(net, branch_pit, node_pit):
         vf = branch_pit[:, IdxBranch.MDOTINIT] / fluid.get_density(NORMAL_TEMPERATURE)
     else:
         vf = branch_pit[:, IdxBranch.MDOTINIT] / get_branch_real_density(fluid, node_pit, branch_pit)
-    v = vf / (np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2)
+    v = vf / branch_area(branch_pit)
     t_outlet = branch_pit[:, IdxBranch.TOUTINIT]
     branch_results = {"v_mps": v, "mf_from": branch_pit[:, IdxBranch.MDOTINIT], "mf_to": -branch_pit[:, IdxBranch.MDOTINIT],
                       "vf": vf, "p_from": node_pit[from_nodes, IdxNode.PINIT], "p_to": node_pit[to_nodes, IdxNode.PINIT],

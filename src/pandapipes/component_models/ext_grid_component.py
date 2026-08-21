@@ -89,20 +89,27 @@ class ExtGrid(NodeElementComponent):
             [IdxNode.TINIT, IdxNode.NODE_TYPE_T],
             [ext_grids.t_k.values[mask_t], float(IdxNode.T)],
         ), mode=PitWriteMode.MEAN))
-        registry.add_override(PitEntries(*build_pit_entries(
+        # COUNT_VAR_MASS_SLACK is a "does a genuine mass slack exist at this node at all" marker, not an
+        # exclusively-owned value - UNIQUE would make it impossible for any other slack-capable
+        # component to ever ALSO mark the same node (a hard conflict error, even though both sides
+        # would agree on the same value). ADDITIVE lets any number of contributors coexist; the
+        # only reader (register_circ_pump_slack_equations) checks "== 0" / "!= 0", so an
+        # accumulated value like 2. from two co-located ext_grids is still read correctly as
+        # "yes, a real slack is here" - there's no need to clamp/OR it down to exactly 1.
+        registry.add(PitEntries(*build_pit_entries(
             index_p,
-            [IdxNode.VAR_MASS_SLACK],
+            [IdxNode.COUNT_VAR_MASS_SLACK],
             [1.]),
-            mode=PitWriteMode.UNIQUE))
+            mode=PitWriteMode.ADDITIVE))
 
     @classmethod
     def register_hydraulic_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
         # register only for nodes that actually have an active ext_grid row - NOT every P-type
         # node in the system (a circ_pump also marks its own flow junction as NODE_TYPE=P purely
         # to anchor a pressure reference; that node is none of ExtGrid's business - it's handled
-        # by CirculationPump._register_slack_equations instead, using the VAR_MASS_SLACK flag
+        # by register_circ_pump_slack_equations instead, using the COUNT_VAR_MASS_SLACK flag
         # written below to know whether a real ext_grid also sits there). ext_grid ALWAYS
-        # provides genuine mass-slack capability - no VAR_MASS_SLACK check needed on this side.
+        # provides genuine mass-slack capability - no COUNT_VAR_MASS_SLACK check needed on this side.
         ext_grids = net[cls.table_name()]
         ext_grids = ext_grids[ext_grids[cls.active_identifier()].values]
         p_grids = ext_grids[np.isin(ext_grids.type.values, ["p", "pt"])]

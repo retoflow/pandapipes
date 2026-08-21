@@ -2,7 +2,8 @@ import numpy as np
 from pandapipes.constants import NORMAL_TEMPERATURE
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
-from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected, _sum_by_group
+from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected, _sum_by_group, \
+    branch_area
 from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
 from pandapipes.properties.fluids import get_fluid
 from pandapipes.properties.properties_toolbox import get_branch_real_density, get_branch_real_eta, get_branch_cp
@@ -47,7 +48,12 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
     rho = get_branch_real_density(fluid, node_pit, b_pit)
     eta = get_branch_real_eta(fluid, node_pit, b_pit, p_m)
 
-    area = np.pi * (b_pit[:, IdxBranch.D] / 2) ** 2
+    # computed once here, then threaded through to calc_lambda/calc_der_lambda AND
+    # derivatives_hydraulic_incomp/comp below - not re-derived at each of those call sites for
+    # the same branch set/iteration (D never changes mid-solve here, only across outer
+    # optimize_dn iterations, so this is safe to reuse for the remainder of this call, but never
+    # cached anywhere longer-lived than that - see branch_area's own docstring for why)
+    area = branch_area(b_pit)
     lambda_, re = calc_lambda(b_pit[:, IdxBranch.MDOTINIT], eta, b_pit[:, IdxBranch.D], b_pit[:, IdxBranch.K], gas_mode,
         friction_model, b_pit[:, IdxBranch.LENGTH], options, area)
     der_lambda = calc_der_lambda(b_pit[:, IdxBranch.MDOTINIT], eta, b_pit[:, IdxBranch.D], b_pit[:, IdxBranch.K], friction_model,
@@ -57,7 +63,7 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
 
     if not gas_mode:
         load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss = (
-            derivatives_hydraulic_incomp(b_pit, der_lambda, p_init_i_abs, p_init_i1_abs, height_difference, rho))
+            derivatives_hydraulic_incomp(b_pit, der_lambda, p_init_i_abs, p_init_i1_abs, height_difference, rho, area))
     else:
         rho_n = np.full(len(b_pit), fluid.get_density(NORMAL_TEMPERATURE))
         comp_fact = fluid.get_compressibility(p_m, tinit_branch)
@@ -66,7 +72,7 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
         der_comp1 = dc * der_p_m1
         load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss = (
             derivatives_hydraulic_comp(node_pit, b_pit, lambda_, der_lambda, p_init_i_abs, p_init_i1_abs,
-                height_difference, comp_fact, der_comp, der_comp1, rho, rho_n))
+                height_difference, comp_fact, der_comp, der_comp1, rho, rho_n, area))
 
     b_pit[:, IdxBranch.DP_FRICT_LOSS] = dp_frict_loss
 

@@ -14,6 +14,10 @@ from pandapipes.component_models.component_toolbox import (
     build_pit_entries,
     get_component_array,
     get_std_type_lookup,
+    get_hydraulic_options,
+    get_thermal_options,
+    register_branch_node_mass_balance,
+    register_branch_node_thermal_balance,
 )
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE, R_UNIVERSAL, P_CONVERSION
@@ -22,7 +26,7 @@ from pandapipes.idx_node import IdxNode
 from pandapipes.pf.derivative_calculation import (
     calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal,
 )
-from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
+from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected, branch_area
 from pandapipes.pf.pipeflow_setup import get_fluid, get_net_option, get_lookup
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
 from pandapipes.pf.system_index import ComponentEquations, HydVarEq, PitEntries, ThermVarEq
@@ -105,13 +109,10 @@ class Pump(BranchWOInternalsComponent):
             return
 
         b_pit = branch_pit[f:t]
-        tbl_idx = b_pit[:, IdxBranch.ELEMENT_IDX].astype(np.int32)
-        cls._compute_pl(net, b_pit, node_pit, tbl_idx)
+        cls._compute_pl(net, b_pit, node_pit)
 
-        options = {"use_numba": get_net_option(net, "use_numba"),
-                   "friction_model": get_net_option(net, "friction_model")}
         df_dm, df_dp, df_dp1, df_dm_node, load, load_fn, load_tn = (
-            calculate_derivatives_hydraulic(net, b_pit, node_pit, options)
+            calculate_derivatives_hydraulic(net, b_pit, node_pit, get_hydraulic_options(net))
         )
 
         fn = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
@@ -132,17 +133,6 @@ class Pump(BranchWOInternalsComponent):
         load_rows_branch = branch_eq.astype(np.int32)
         load_branch = load.astype(np.float64)
 
-        # equation position node
-        fn_eq      = sys_idx.idx(HydVarEq.NODE, fn)
-        tn_eq      = sys_idx.idx(HydVarEq.NODE, tn)
-
-        # system matrix node
-        rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
-        cols_node = np.concatenate([mdot_col, mdot_col]).astype(np.int32)
-        data_node = np.concatenate([-df_dm_node, df_dm_node]).astype(np.float64)
-        load_rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
-        load_node = np.concatenate([-load_fn, load_tn]).astype(np.float64)
-
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
@@ -151,24 +141,29 @@ class Pump(BranchWOInternalsComponent):
             load_data=load_branch,
         ))
 
-        registry.add(ComponentEquations(
-            rows=rows_node,
-            cols=cols_node,
-            data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
-        ))
+        register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm_node,
+                                          -load_fn, load_tn)
 
     @classmethod
-    def _compute_pl(cls, net, b_pit, node_pit, tbl_idx):
-        """Compute pressure lift from pump characteristic and write it into b_pit[:, PL]."""
+    def _compute_pl(cls, net, b_pit, node_pit):
+        """Compute pressure lift from pump characteristic and write it into b_pit[:, PL].
+
+        get_component_array(net, cls.table_name()) is filtered by the same active_hydraulics
+        mask, over the same table row range, as b_pit itself (see register_hydraulic_equations
+        above and get_component_array's own only_active filtering) - so its rows are already
+        aligned 1:1 with b_pit's rows without needing any extra index. Indexing it via
+        IdxBranch.ELEMENT_IDX (a pandas index *label*) instead of positionally was a bug: that
+        array is built positionally (row i = i-th row of net[table_name()]), so a label-based
+        index silently breaks as soon as the table's index isn't a contiguous 0..n-1 range (e.g.
+        after dropping a row and adding a new one).
+        """
         pump_array = get_component_array(net, cls.table_name())
-        idx = pump_array[tbl_idx, cls.STD_TYPE].astype(np.int32)
+        idx = pump_array[:, cls.STD_TYPE].astype(np.int32)
         std_types = get_std_type_lookup(net, cls.table_name())[idx]
 
         from_nodes = b_pit[:, IdxBranch.FROM_NODE].astype(np.int32)
         fluid = get_fluid(net)
-        area = np.pi * (b_pit[:, IdxBranch.D] / 2) ** 2
+        area = branch_area(b_pit)
         v_mps = b_pit[:, IdxBranch.MDOTINIT] / area / fluid.get_density(NORMAL_TEMPERATURE)
         if fluid.is_gas:
             p_from = node_pit[from_nodes, IdxNode.PAMB] + node_pit[from_nodes, IdxNode.PINIT]
@@ -192,11 +187,10 @@ class Pump(BranchWOInternalsComponent):
         branch_idx = np.arange(f, t, dtype=np.int32)
         if not len(branch_idx):
             return
-        options = {"use_numba": get_net_option(net, "use_numba")}
         branch_pit_old = net["_active_old_pit"]["branch"]
         fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout = (
             calculate_derivatives_branch_thermal(net, branch_pit[f:t], node_pit,
-                                          branch_pit_old[f:t], options)
+                                          branch_pit_old[f:t], get_thermal_options(net))
         )
 
         b_pit = branch_pit[f:t]
@@ -218,16 +212,6 @@ class Pump(BranchWOInternalsComponent):
         load_rows_branch = branch_eq.astype(np.int32)
         load_branch = fb.astype(np.float64)
 
-        # equation position node
-        tn_eq = sys_idx.idx(ThermVarEq.NODE, tn)
-
-        # system matrix node
-        rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
-        cols_node = np.concatenate([t_tn_col, t_out_col]).astype(np.int32)
-        data_node = np.concatenate([dfnt_dt, dfnt_dtout]).astype(np.float64)
-        load_rows_node = tn_eq.astype(np.int32)
-        load_node = fnt.astype(np.float64)
-
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
@@ -236,13 +220,8 @@ class Pump(BranchWOInternalsComponent):
             load_data=load_branch,
         ))
 
-        registry.add(ComponentEquations(
-            rows=rows_node,
-            cols=cols_node,
-            data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
-        ))
+        register_branch_node_thermal_balance(sys_idx, registry, tn, t_tn_col, t_out_col,
+                                             dfnt_dt, dfnt_dtout, fnt)
 
     @classmethod
     def get_result_table(cls, net):

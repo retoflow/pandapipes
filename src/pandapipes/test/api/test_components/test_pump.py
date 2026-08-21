@@ -241,5 +241,39 @@ def test_compression_power(use_numba):
     assert np.isclose(pow_pump_MW[0], net.res_pump.compr_power_mw[0])
 
 
+@pytest.mark.parametrize("use_numba", [True, False])
+def test_pump_std_type_after_index_gap(use_numba):
+    """
+    Pump._compute_pl looks up the pump's characteristic curve via
+    get_component_array(net, "pump")[tbl_idx, cls.STD_TYPE], where tbl_idx comes from
+    IdxBranch.ELEMENT_IDX. That array is built positionally (row i = i-th row of
+    net.pump), but ELEMENT_IDX stores the pandas *index label* of the pump, not its
+    position - so as soon as net.pump's index isn't 0..n-1 anymore, the lookup goes out
+    of bounds (or, if still in bounds, silently picks up a different pump's data).
+
+    A non-contiguous index arises from perfectly ordinary usage: dropping a pump and
+    adding a replacement, since pandas keeps counting new row labels upward instead of
+    reusing the freed one.
+    """
+    net = pandapipes.create_empty_network("net", add_stdtypes=True, fluid="water")
+
+    j1, j2, j3, j4, j5 = pandapipes.create_junctions(net, 5, pn_bar=5, tfluid_k=283.15)
+    pandapipes.create_pipe(net, j1, j2, std_type='125_PE_80_SDR_11', k_mm=1., length_km=0.1)
+    pandapipes.create_ext_grid(net, j1, 5, 283.15)
+    pandapipes.create_pump(net, j2, j3, std_type='P1')
+    pandapipes.create_pump(net, j3, j4, std_type='P1')
+    pandapipes.create_pump(net, j4, j5, std_type='P1')
+    pandapipes.create_sink(net, j5, 0.5)
+
+    # same 3 pumps/topology/std_types as above, just re-labeled: drop the middle pump and
+    # add an equivalent replacement -> index becomes [0, 2, 3] instead of [0, 1, 2]
+    net.pump.drop(index=[1], inplace=True)
+    pandapipes.create_pump(net, j3, j4, std_type='P1')
+    assert net.pump.index.tolist() == [0, 2, 3]
+
+    pandapipes.pipeflow(net, use_numba=use_numba)
+    assert net.converged
+
+
 if __name__ == '__main__':
     n = pytest.main(["test_pump.py"])

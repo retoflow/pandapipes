@@ -5,7 +5,7 @@
 import logging
 import numpy as np
 from scipy.optimize import newton
-from pandapipes.pf.internals_toolbox import _sum_by_group
+from pandapipes.pf.internals_toolbox import _sum_by_group, branch_area
 from pandapipes.pf.pipeflow_setup import branches_not_zero_flow
 from pandapipes.constants import P_CONVERSION, GRAVITATION_CONSTANT, NORMAL_PRESSURE, \
     NORMAL_TEMPERATURE
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init_i1_abs,
-                                    height_difference, rho):
+                                    height_difference, rho, area):
     # Formulas for pressure loss in incompressible flow
     # Use medium density ((rho_from + rho_to) / 2) for Darcy Weisbach according to
     # https://www.schweizer-fn.de/rohr/rohrleitung/rohrleitung.php#fluessigkeiten
@@ -33,7 +33,7 @@ def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init
 
     const_height = rho * GRAVITATION_CONSTANT * height_difference / P_CONVERSION
     friction_term = l * lambd / d + lc
-    const_term = 1 / ((np.pi * (d / 2) ** 2) ** 2 * rho * P_CONVERSION * 2)
+    const_term = 1 / (area ** 2 * rho * P_CONVERSION * 2)
 
     df_dm = - const_term * (2 * m_abs_deriv * friction_term + der_lambda
                             * l / d * m_init2)
@@ -54,7 +54,7 @@ def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init
 
 
 def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_init_i_abs, p_init_i1_abs,
-                                  height_difference, comp_fact, der_comp, der_comp1, rho, rho_n):
+                                  height_difference, comp_fact, der_comp, der_comp1, rho, rho_n, area):
     # Formulas for gas pressure loss according to laminar version
     m_init_abs = np.abs(branch_pit[:, IdxBranch.MDOTINIT])
     m_abs_deriv = np.maximum(m_init_abs, 1e-8)
@@ -67,7 +67,7 @@ def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_i
     const_height = rho * GRAVITATION_CONSTANT * height_difference / P_CONVERSION
     friction_term = np.divide(lambda_ * branch_pit[:, IdxBranch.LENGTH], branch_pit[:, IdxBranch.D]) + branch_pit[:, IdxBranch.LOSS_COEFFICIENT]
     normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n)
-    const_term = normal_term / (np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2) ** 2
+    const_term = normal_term / area ** 2
 
     const_term_p = const_term * m_init2 * friction_term * tm
     df_dp = 1. - const_term_p * p_sum_div * (der_comp - comp_fact * p_sum_div)
@@ -109,7 +109,7 @@ def derivatives_branch_thermal_np(branch_pit,
     dfnt_dtout = cp_n * mdot
 
     if transient:
-        area = np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2
+        area = branch_area(branch_pit)
         tvor = branch_pit_old[:, branch_pit_old_lookup[IdxBranch.TOUTINIT]]
 
         fb = (
@@ -177,7 +177,7 @@ def derivatives_node_thermal_np(node_pit, branch_pit,
     dfn_dt = np.zeros_like(t_init_n)
 
     if transient:
-        area = np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2
+        area = branch_area(branch_pit)
         alpha = branch_pit[:, IdxBranch.ALPHA] * np.pi * branch_pit[:, IdxBranch.DO]
         t_amb = branch_pit[:, IdxBranch.TEXT]
 

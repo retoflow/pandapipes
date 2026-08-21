@@ -7,13 +7,16 @@ from numpy import dtype
 
 from pandapipes.component_models import (get_fluid, BranchWOInternalsComponent, get_component_array,
                                          standard_branch_wo_internals_result_lookup)
-from pandapipes.component_models.component_toolbox import build_pit_entries
+from pandapipes.component_models.component_toolbox import (
+    build_pit_entries, get_thermal_options, register_branch_node_mass_balance,
+    register_branch_node_thermal_balance,
+)
 from pandapipes.component_models.junction_component import Junction
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
-from pandapipes.pf.pipeflow_setup import get_lookup, get_net_option
-from pandapipes.pf.derivative_calculation import calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal
+from pandapipes.pf.pipeflow_setup import get_lookup
+from pandapipes.pf.derivative_calculation import calculate_derivatives_branch_thermal
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
 from pandapipes.pf.system_index import ComponentEquations, EqWriteMode, HydVarEq, ThermVarEq, PitEntries
 from pandapipes.properties.properties_toolbox import get_branch_cp
@@ -182,6 +185,13 @@ class HeatConsumer(BranchWOInternalsComponent):
             mask_zero  = b_pit[:, IdxBranch.QEXT] == 0
             mask_ign   = mask_equal | mask_zero
 
+            # A degenerate QE_TR consumer (t_out already >= t_in, or qext_w == 0) has no valid
+            # mdot = qext/(cp*(t_in-t_out)) to solve for - reset MDOTINIT to 0 in the pit itself
+            # (not just locally skip it) before it's read below, so a stale mass flow from a
+            # prior, non-degenerate iterate can't leak into this branch's own load (next line) or
+            # the node mass-balance load further down.
+            b_pit[mask_qe_tr & mask_ign, IdxBranch.MDOTINIT] = 0.
+
             df_dm[mask_qe_tr & ~mask_ign] = df_dm_qetr[mask_qe_tr & ~mask_ign]
             load[mask_qe_tr] = (-b_pit[mask_qe_tr, IdxBranch.QEXT] + df_dm_qetr[mask_qe_tr] * b_pit[mask_qe_tr, IdxBranch.MDOTINIT])
 
@@ -192,25 +202,6 @@ class HeatConsumer(BranchWOInternalsComponent):
         load_rows_branch = branch_eq.astype(np.int32)
         load_branch = load.astype(np.float64)
 
-        # equation position node
-        fn_eq     = sys_idx.idx(HydVarEq.NODE, fn)
-        tn_eq     = sys_idx.idx(HydVarEq.NODE, tn)
-
-        # derivative and load vector node
-        df_dm_node = np.ones_like(branch_idx)
-        load_fn = -b_pit[:, IdxBranch.MDOTINIT]
-        load_tn = b_pit[:, IdxBranch.MDOTINIT]
-        if np.any(mask_qe_tr):
-            load_fn[mask_qe_tr & mask_ign] = 0
-            load_tn[mask_qe_tr & mask_ign] = 0
-
-        # system matrix node
-        rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
-        cols_node = np.concatenate([mdot_col, mdot_col]).astype(np.int32)
-        data_node = np.concatenate([-df_dm_node, df_dm_node]).astype(np.float64)
-        load_rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
-        load_node = np.concatenate([load_fn, load_tn]).astype(np.float64)
-
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
@@ -220,13 +211,12 @@ class HeatConsumer(BranchWOInternalsComponent):
             mode=EqWriteMode.UNIQUE,
         ))
 
-        registry.add(ComponentEquations(
-            rows=rows_node,
-            cols=cols_node,
-            data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
-        ))
+        # derivative and load vector node - no extra masking needed for degenerate QE_TR rows
+        # here, MDOTINIT was already reset to 0 in the pit above, so both loads read 0 there too
+        df_dm_node = np.ones_like(branch_idx)
+        load = b_pit[:, IdxBranch.MDOTINIT]
+        register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm_node,
+                                          -load, load)
 
     @classmethod
     def register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
@@ -234,7 +224,6 @@ class HeatConsumer(BranchWOInternalsComponent):
         branch_idx = np.arange(f, t, dtype=np.int32)
         if not len(branch_idx):
             return
-        options = {"use_numba": get_net_option(net, "use_numba")}
         branch_pit_old = net["_active_old_pit"]["branch"]
 
         b_pit = branch_pit[f:t]
@@ -257,7 +246,7 @@ class HeatConsumer(BranchWOInternalsComponent):
 
 
         fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout = calculate_derivatives_branch_thermal(
-            net, branch_pit[f:t], node_pit, branch_pit_old[f:t], options
+            net, branch_pit[f:t], node_pit, branch_pit_old[f:t], get_thermal_options(net)
         )
 
         fn = get_from_nodes_corrected(b_pit).astype(np.int32)
@@ -287,16 +276,6 @@ class HeatConsumer(BranchWOInternalsComponent):
         load_rows_branch = branch_eq.astype(np.int32)
         load_branch = fb.astype(np.float64)
 
-        # equation position node
-        tn_eq = sys_idx.idx(ThermVarEq.NODE, tn)
-
-        # system matrix node
-        rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
-        cols_node = np.concatenate([t_to_col, t_out_col]).astype(np.int32)
-        data_node = np.concatenate([dfnt_dt, dfnt_dtout]).astype(np.float64)
-        load_rows_node = tn_eq.astype(np.int32)
-        load_node = fnt.astype(np.float64)
-
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
@@ -306,13 +285,8 @@ class HeatConsumer(BranchWOInternalsComponent):
             mode=EqWriteMode.UNIQUE,
         ))
 
-        registry.add(ComponentEquations(
-            rows=rows_node,
-            cols=cols_node,
-            data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
-        ))
+        register_branch_node_thermal_balance(sys_idx, registry, tn, t_to_col, t_out_col,
+                                             dfnt_dt, dfnt_dtout, fnt)
 
 
 

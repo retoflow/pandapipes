@@ -92,18 +92,15 @@ class Calculation:
         One-time setup run before the Newton-Raphson loop starts (e.g. connectivity
         identification, pit reduction). Default: no-op.
         """
-        pass
 
     def on_converged(self, net):
         """Hook run once, immediately after a successful Newton-Raphson solve. Default: no-op."""
-        pass
 
     def rerun(self, net):
         """
         Hook run after a successful solve to let components request a full rerun (e.g. a
         pressure control adjusting its target). Default: no-op.
         """
-        pass
 
     def extract_results(self, net):
         """Write the converged results from "_active_pit" back into the general pit structure."""
@@ -292,10 +289,24 @@ class BidirectionalCalculation(Calculation):
     """Newton-Raphson solve alternating hydraulics and heat transfer (see :func:`solve_bidirectional`)."""
     MODE = 'bidirectional'
     ITER = 'max_iter_bidirect'
-    VARS = ['mdot', 'p', 'TOUT', 'T']
-    TOLS = ['tol_m', 'tol_p', 'tol_T', 'tol_T']
-    PITS = ['branch', 'node', 'branch', 'node']
-    COLS = [IdxBranch.MDOTINIT, IdxNode.PINIT, IdxBranch.TOUTINIT, IdxNode.TINIT]
+    # solve_bidirectional() concatenates solve_hydraulics()'s 3 pairs (mdot, p, mdotslack) with
+    # solve_temperature()'s 2 pairs (Tout, T) - VARS/TOLS/PITS/COLS/filtered must list all 5 in
+    # that same order (this is exactly HydraulicCalculation's VARS/TOLS/PITS/COLS followed by
+    # ThermalCalculation's), or Calculation.run()'s positional un-interleaving
+    # (results[0::2]/results[1::2]) pairs each value array with the wrong variable name/pit/col -
+    # a previous version listed only 4 entries (['mdot', 'p', 'TOUT', 'T']), which silently
+    # shifted every entry from 'mdotslack' onward: 'TOUT' was actually paired with mdotslack's
+    # values/branch pit/TOUTINIT col, 'T' was paired with Tout's values, and the real T pair was
+    # dropped entirely (never damped, never convergence-checked). With
+    # nonlinear_method="automatic", the mismatched (branch pit, slack_nodes) combination for the
+    # 'TOUT' slot could then write mdotslack's node-indexed damping-fallback values into the
+    # branch pit at those same (node-range) row indices, raising IndexError once a slack node's
+    # index exceeded the branch pit's row count.
+    VARS = ['mdot', 'p', 'mdotslack', 'Tout', 'T']
+    TOLS = ['tol_m', 'tol_p', 'tol_m', 'tol_T', 'tol_T']
+    PITS = ['branch', 'node', 'node', 'branch', 'node']
+    COLS = [IdxBranch.MDOTINIT, IdxNode.PINIT, IdxNode.MDOTSLACKINIT, IdxBranch.TOUTINIT,
+            IdxNode.TINIT]
 
     def handle_non_convergence(self):
         raise PipeflowNotConverged("The bidrectional calculation did not converge to a solution.")
