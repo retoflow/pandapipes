@@ -56,11 +56,11 @@ def execute_bidirectional(net):
 
 
 class Calculation:
-    """
-    Base class for one Newton-Raphson nonlinear solve (e.g. hydraulics, heat transfer,
-    bidirectional). A subclass declares, as class attributes, what used to be passed
-    around as parallel lists (``solver_vars``/``tols``/``pit_names``/``iter_name``) and
-    implements :meth:`solve_step` to perform one linearized assemble-and-solve pass.
+    """Base class for one Newton-Raphson nonlinear solve (hydraulics, heat transfer, bidirectional).
+
+    A subclass declares, as class attributes, what used to be passed around as parallel
+    lists (``solver_vars``/``tols``/``pit_names``/``iter_name``) and implements
+    :meth:`solve_step` to perform one linearized assemble-and-solve pass.
 
     Newton-Raphson iteration recap:
       1. Build the Jacobian df/dx at the current guess x
@@ -88,18 +88,18 @@ class Calculation:
         raise PipeflowNotConverged("The calculation did not converge to a solution.")
 
     def prepare(self, net):
-        """
-        One-time setup run before the Newton-Raphson loop starts (e.g. connectivity
-        identification, pit reduction). Default: no-op.
+        """One-time setup run before the Newton-Raphson loop starts.
+
+        E.g. connectivity identification, pit reduction. Default: no-op.
         """
 
     def on_converged(self, net):
         """Hook run once, immediately after a successful Newton-Raphson solve. Default: no-op."""
 
     def rerun(self, net):
-        """
-        Hook run after a successful solve to let components request a full rerun (e.g. a
-        pressure control adjusting its target). Default: no-op.
+        """Hook run after a successful solve to let components request a full rerun.
+
+        E.g. a pressure control adjusting its target. Default: no-op.
         """
 
     def extract_results(self, net):
@@ -107,8 +107,7 @@ class Calculation:
         raise NotImplementedError
 
     def solve_step(self, net):
-        """
-        Perform one linearized solve (assemble Jacobian, spsolve, update pit values).
+        """Perform one linearized solve (assemble Jacobian, spsolve, update pit values).
 
         :param net: the pandapipesNet to solve on
         :return: (results, residual, filtered) where results is a flat list of
@@ -205,6 +204,7 @@ class Calculation:
 
 class HydraulicCalculation(Calculation):
     """Newton-Raphson solve for pressure/mdot (see :func:`solve_hydraulics`)."""
+
     MODE = 'hydraulics'
     ITER = 'max_iter_hyd'
     VARS = ['mdot', 'p', 'mdotslack']
@@ -241,6 +241,7 @@ class HydraulicCalculation(Calculation):
 
 class ThermalCalculation(Calculation):
     """Newton-Raphson solve for branch outlet / node temperature (see :func:`solve_temperature`)."""
+
     MODE = 'heat'
     ITER = 'max_iter_therm'
     VARS = ['Tout', 'T']
@@ -287,6 +288,7 @@ class ThermalCalculation(Calculation):
 
 class BidirectionalCalculation(Calculation):
     """Newton-Raphson solve alternating hydraulics and heat transfer (see :func:`solve_bidirectional`)."""
+
     MODE = 'bidirectional'
     ITER = 'max_iter_bidirect'
     # solve_bidirectional() concatenates solve_hydraulics()'s 3 pairs (mdot, p, mdotslack) with
@@ -340,15 +342,14 @@ def solve_bidirectional(net):
     return res, residual, filtered
 
 def solve_hydraulics(net):
-    """
-    Create and solve the linearized system of equations (based on a jacobian in form of a scipy
-    sparse matrix and a load vector in form of a numpy array) in order to calculate the hydraulic
-    magnitudes (pressure and velocity) for the network nodes and branches.
+    """Create and solve the linearized system of equations to calculate hydraulic magnitudes.
+
+    Builds a jacobian (scipy sparse matrix) and load vector (numpy array) to calculate
+    pressure and velocity for the network nodes and branches.
 
     :param net: The pandapipesNet for which to solve the hydraulic matrix
     :type net: pandapipesNet
-    :return:
-
+    :return: (results, residual, filtered) - see Calculation.solve_step for the exact shape
     """
     options = net["_options"]
 
@@ -385,18 +386,16 @@ def solve_hydraulics(net):
             node_pit[slack_nodes, IdxNode.MDOTSLACKINIT], msl_init_old], epsilon, filtered
 
 def solve_temperature(net):
-    """
-    This function contains the procedure to build and solve a linearized system of equation based on
-    an underlying net and the necessary graph data structures. Temperature values are calculated.
-    Returned are the solution vectors for the new iteration, the original solution vectors and a
-    vector containing component indices for the system matrix entries
+    """Build and solve a linearized system of equations to calculate temperature values.
+
+    Uses the underlying net and the necessary graph data structures. Returned are the
+    solution vectors for the new iteration, the original solution vectors and a vector
+    containing component indices for the system matrix entries.
 
     :param net: The pandapipesNet for which to solve the temperature matrix
     :type net: pandapipesNet
     :return: branch_pit
-
     """
-
     options = net["_options"]
     branch_pit = net["_active_pit"]["branch"]
     node_pit = net["_active_pit"]["node"]
@@ -438,8 +437,7 @@ def solve_temperature(net):
 
 
 def set_damping_factor(net, niter, errors):
-    """
-    Set the value of the damping factor (factor for the newton step width) from current results.
+    """Set the value of the damping factor (factor for the newton step width) from current results.
 
     :param net: the net for which to perform the pipeflow
     :type net: pandapipesNet
@@ -448,8 +446,10 @@ def set_damping_factor(net, niter, errors):
     :param errors: an array containing the current residuals of all field variables solved for
     :return: No Output.
 
-    EXAMPLE:
+    Example
+    -------
         set_damping_factor(net, niter, [error_p, error_v])
+
     """
     error_increased = []
     for error in errors.values():

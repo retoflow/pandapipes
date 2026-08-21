@@ -13,9 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class NodeElementComponent(Component):
-    """
-
-    """
+    """Abstract base class for node element components."""
 
     @classmethod
     def table_name(cls):

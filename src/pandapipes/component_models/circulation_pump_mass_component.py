@@ -41,7 +41,7 @@ class CirculationPumpMass(CirculationPump):
 
     @classmethod
     def get_component_input(cls):
-        """
+        """Get component input.
 
         :return:
         :rtype:

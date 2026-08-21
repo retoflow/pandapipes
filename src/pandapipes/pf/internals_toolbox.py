@@ -19,22 +19,26 @@ logger = logging.getLogger(__name__)
 
 
 def branch_area(branch_pit):
-    """Pipe cross-sectional area (pi*(D/2)**2) per branch row - a pure function of D, deliberately
-    NOT cached as its own pit column (that AREA column existed once and was removed, see git
-    history "remove area and scale jacobi matrix"): D can change mid-solve (e.g. optimize_dn's
-    diameter sizing mutates it every outer iteration), and a cached AREA column would need to be
-    kept in perfect sync everywhere D is written, or silently go stale - a correctness hazard
-    worse than the recompute it would save. Callers that need this more than once within the same
-    computation (e.g. calculate_derivatives_hydraulic, which uses it for both calc_lambda and its
-    own const_term) should call this once and pass the result along, rather than recomputing the
-    formula inline at each use site - that repeated-inline-formula pattern is what this function
-    replaces."""
+    """Pipe cross-sectional area (pi*(D/2)**2) per branch row.
+
+    A pure function of D, deliberately NOT cached as its own pit column (that AREA column
+    existed once and was removed, see git history "remove area and scale jacobi matrix"): D
+    can change mid-solve (e.g. optimize_dn's diameter sizing mutates it every outer
+    iteration), and a cached AREA column would need to be kept in perfect sync everywhere D
+    is written, or silently go stale - a correctness hazard worse than the recompute it would
+    save. Callers that need this more than once within the same computation (e.g.
+    calculate_derivatives_hydraulic, which uses it for both calc_lambda and its own
+    const_term) should call this once and pass the result along, rather than recomputing the
+    formula inline at each use site - that repeated-inline-formula pattern is what this
+    function replaces.
+    """
     return np.pi * (branch_pit[:, IdxBranch.D] / 2) ** 2
 
 
 def _sum_by_group_sorted(indices, *values):
-    """Auxiliary function to sum up values by some given indices (both as numpy arrays). Expects the
-    indices and values to already be sorted.
+    """Auxiliary function to sum up values by some given indices (both as numpy arrays).
+
+    Expects the indices and values to already be sorted.
 
     :param indices:
     :type indices:
@@ -70,8 +74,7 @@ def _sum_by_group_sorted(indices, *values):
 
 
 def _sum_by_group_np(indices, *values):
-    """
-    Auxiliary function to sum up values by some given indices (both as numpy arrays).
+    """Auxiliary function to sum up values by some given indices (both as numpy arrays).
 
     :param indices:
     :type indices:
@@ -80,7 +83,6 @@ def _sum_by_group_np(indices, *values):
     :return:
     :rtype:
     """
-
     # sort indices and values by indices
     order = np.argsort(indices)
     indices = indices[order]
@@ -109,8 +111,7 @@ def _sum_by_group_numba(indices, *values):
     return _sum_by_group_np(indices, *values)
 
 def _sum_by_group(use_numba, indices, *values):
-    """
-    Auxiliary function to sum up values by some given indices (both as numpy arrays).
+    """Auxiliary function to sum up values by some given indices (both as numpy arrays).
 
     :param use_numba:
     :type use_numba:
@@ -131,10 +132,10 @@ def _sum_by_group(use_numba, indices, *values):
 
 
 def select_from_pit(table_index_array, input_array, data):
-    """
-        Auxiliary function to retrieve values from a table like a pit. Each data entry corresponds
-        to a table_index_array entry. Example: velocities are indexed by the corresponding
-        from_nodes stored in the pipe pit.
+    """Auxiliary function to retrieve values from a table like a pit.
+
+        Each data entry corresponds to a table_index_array entry. Example: velocities are indexed
+        by the corresponding from_nodes stored in the pipe pit.
 
         The function inputs another array which consists of some table_index_array entries the user
         wants to retrieve. The function is used in pandapipes results evaluation. The input array is
@@ -178,8 +179,7 @@ def max_nb(arr):
 
 
 def get_from_nodes_corrected(branch_pit, switch_from_to_col=None):
-    """
-    Function to get corrected from nodes from the branch pit.
+    """Function to get corrected from nodes from the branch pit.
 
     Usually, this should be used if the velocity in a branch is negative, so that the\
     flow goes from the to_node to the from_node. The parameter switch_from_to_col indicates\
@@ -200,8 +200,7 @@ def get_from_nodes_corrected(branch_pit, switch_from_to_col=None):
 
 
 def get_to_nodes_corrected(branch_pit, switch_from_to_col=None):
-    """
-    Function to get corrected to nodes from the branch pit.
+    """Function to get corrected to nodes from the branch pit.
 
     Usually, this should be used if the velocity in a branch is negative, so that the\
     flow goes from the to_node to the from_node. The parameter switch_from_to_col indicates\

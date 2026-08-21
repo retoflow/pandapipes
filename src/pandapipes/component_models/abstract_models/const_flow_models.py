@@ -32,7 +32,7 @@ class ConstFlow(NodeElementComponent):
 
     @classmethod
     def get_component_input(cls):
-        """
+        """Get component input.
 
         :return:
         :rtype:
@@ -95,8 +95,7 @@ class ConstFlow(NodeElementComponent):
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
-        """
-        Function that extracts certain results.
+        """Function that extracts certain results.
 
         :param mode:
         :type mode:

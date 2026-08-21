@@ -20,9 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class BranchWInternalsComponent(BranchComponent):
-    """
-
-    """
+    """Abstract base class for branch components with internal nodes."""
 
     @classmethod
     def table_name(cls):
@@ -42,7 +40,7 @@ class BranchWInternalsComponent(BranchComponent):
 
     @classmethod
     def internal_node_name(cls):
-        """
+        """Return the name of the internal nodes for this class.
 
         :return: internal_node_name - name of the internal nodes for this class
         :rtype: str
@@ -63,8 +61,7 @@ class BranchWInternalsComponent(BranchComponent):
 
     @classmethod
     def create_node_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start, current_table, internals):
-        """
-        Function which creates node lookups.
+        """Function which creates node lookups.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -94,8 +91,7 @@ class BranchWInternalsComponent(BranchComponent):
 
     @classmethod
     def create_branch_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start, current_table, internals):
-        """
-        Function which creates branch lookups.
+        """Function which creates branch lookups.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -196,7 +192,7 @@ class BranchWInternalsComponent(BranchComponent):
 
     @classmethod
     def get_internal_results(cls, net, branch):
-        """
+        """Get internal results for a branch.
 
         :param net:
         :type net:

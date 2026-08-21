@@ -8,8 +8,7 @@ from pandapower.plotting.geo import _node_geometries_from_geodata, \
 
 
 def convert_gis_to_geodata(net, node_geodata=True, branch_geodata=True):
-    """
-    Extracts information on bus and line geodata from the geometries of a geopandas geodataframe.
+    """Extract information on bus and line geodata from the geometries of a geopandas geodataframe.
 
     :param net: The net for which to convert the geodata
     :type net: pandapowerNet

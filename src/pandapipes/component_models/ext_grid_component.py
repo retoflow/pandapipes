@@ -20,9 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class ExtGrid(NodeElementComponent):
-    """
-
-    """
+    """External grid component acting as the network's slack node for pressure and temperature."""
 
     @classmethod
     def table_name(cls):
@@ -52,7 +50,7 @@ class ExtGrid(NodeElementComponent):
 
     @classmethod
     def get_component_input(cls):
-        """
+        """Get component input.
 
         :return:
         :rtype:
@@ -232,7 +230,7 @@ class ExtGrid(NodeElementComponent):
 
     @classmethod
     def get_result_table(cls, net):
-        """
+        """Get the result table columns.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -244,8 +242,7 @@ class ExtGrid(NodeElementComponent):
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
-        """
-        Function that extracts certain results.
+        """Function that extracts certain results.
 
         :param branch_results:
         :type branch_results:

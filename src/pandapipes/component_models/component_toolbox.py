@@ -17,27 +17,32 @@ from pandas import Index
 
 
 def get_hydraulic_options(net):
-    """``options`` dict expected by calculate_derivatives_hydraulic - factored out because every
-    branch component's own register_hydraulic_equations rebuilt this same 2-key dict from
-    net["_options"] independently."""
+    """``options`` dict expected by calculate_derivatives_hydraulic.
+
+    Factored out because every branch component's own register_hydraulic_equations rebuilt
+    this same 2-key dict from net["_options"] independently.
+    """
     return {"use_numba": get_net_option(net, "use_numba"),
             "friction_model": get_net_option(net, "friction_model")}
 
 
 def get_thermal_options(net):
-    """``options`` dict expected by calculate_derivatives_branch_thermal/
-    calculate_derivatives_node_thermal - same rationale as get_hydraulic_options; the thermal
-    derivatives only ever need use_numba, not friction_model."""
+    """``options`` dict expected by calculate_derivatives_branch_thermal/calculate_derivatives_node_thermal.
+
+    Same rationale as get_hydraulic_options; the thermal derivatives only ever need
+    use_numba, not friction_model.
+    """
     return {"use_numba": get_net_option(net, "use_numba")}
 
 
 def register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm_node, load_fn, load_tn):
-    """Every branch component's own mass flow (MDOTINIT) feeds additively into both its
-    from-node's and its to-node's mass-balance equation, with opposite sign (mass leaving the
-    from-node is mass entering the to-node) - this exact block used to be duplicated
-    near-verbatim in every branch component that calls calculate_derivatives_hydraulic (pipe,
-    valve, flow_control, pump, pressure_control, heat_exchanger), plus heat_consumer's own
-    differently-derived equivalent.
+    """Register a branch's own mass flow (MDOTINIT) into both its from- and to-node balances.
+
+    Feeds additively into both its from-node's and its to-node's mass-balance equation,
+    with opposite sign (mass leaving the from-node is mass entering the to-node) - this
+    exact block used to be duplicated near-verbatim in every branch component that calls
+    calculate_derivatives_hydraulic (pipe, valve, flow_control, pump, pressure_control,
+    heat_exchanger), plus heat_consumer's own differently-derived equivalent.
 
     df_dm_node is always plain ones (see calculate_derivatives_hydraulic's own df_dm_nodes, or
     heat_consumer's np.ones_like(branch_idx)) - a unit of mdot change always changes a node's mass
@@ -67,14 +72,17 @@ def register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm
 
 
 def register_branch_node_thermal_balance(sys_idx, registry, tn, t_tn_col, t_out_col, dfnt_dt, dfnt_dtout, fnt):
-    """Every branch component's own thermal continuity equation (mixed-temperature energy
+    """Register a branch's own thermal continuity equation at its to-node.
+
+    Every branch component's own thermal continuity equation (mixed-temperature energy
     balance at its own to-node, from calculate_derivatives_branch_thermal's fnt/dfnt_dt/
     dfnt_dtout) was duplicated near-verbatim in every branch component that calls it (pipe,
     valve, flow_control, pump, pressure_control, heat_exchanger, heat_consumer) - this function
     only assembles the (row, col, data) COO triples and registers them, it never touches the
     derivative math itself. t_tn_col/t_out_col are the to-node's TINIT column and the branch's
     own TOUTINIT column respectively (callers derive them via sys_idx.idx(ThermVarEq.TINIT, tn)/
-    sys_idx.idx(ThermVarEq.TOUTINIT, branch_idx))."""
+    sys_idx.idx(ThermVarEq.TOUTINIT, branch_idx)).
+    """
     tn_eq = sys_idx.idx(ThermVarEq.NODE, tn)
 
     rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
@@ -93,7 +101,9 @@ def register_branch_node_thermal_balance(sys_idx, registry, tn, t_tn_col, t_out_
 
 
 def register_circ_pump_node_continuity(net, branch_pit, sys_idx, registry, table_name):
-    """A circulation pump's own branch (return_junction -> flow_junction) has no momentum
+    """Register a circulation pump's own branch flow into both its nodes' mass balances.
+
+    A circulation pump's own branch (return_junction -> flow_junction) has no momentum
     equation of its own - it prescribes flow rather than deriving a pressure drop from
     friction (unlike calculate_derivatives_hydraulic's branch components) - so its
     contribution to both nodes' mass balance is just its own MDOTINIT flowing straight
@@ -119,7 +129,8 @@ def register_circ_pump_node_continuity(net, branch_pit, sys_idx, registry, table
 
 def register_circ_pump_slack_equations(net, node_pit, sys_idx, registry, table_name,
                                        active_identifier, to_junction_col, connected_node_table):
-    """
+    """Register the pressure/slack-mass equations for a circulation pump's own flow junction.
+
     A circ pump's own flow junction gets ``NODE_TYPE = P`` purely to anchor an absolute
     pressure reference (pressure is only ever defined up to a constant otherwise) - it has
     no genuine external connection to freely supply/absorb mass, unlike a real ext_grid.
@@ -193,7 +204,7 @@ def get_internal_lookup_structure(internals, table_name, internal_elements, star
     internals[table_name][:, 1] = end
 
 def p_correction_height_air(height):
-    """
+    """Calculate the atmospheric pressure correction for a height using the barometric formula.
 
     :param height:
     :type height:
@@ -205,7 +216,7 @@ def p_correction_height_air(height):
 
 
 def vinterp(min_vals, max_vals, lengths):
-    """
+    """Compute linearly interpolated values between min_vals and max_vals for each range.
 
     :param min_vals:
     :type min_vals:
@@ -223,8 +234,7 @@ def vinterp(min_vals, max_vals, lengths):
 
 
 def vrange(starts, lengths):
-    """
-    Create concatenated ranges of integers for multiple start/length
+    """Create concatenated ranges of integers for multiple start/length.
 
     :param starts: starts for each range
     :type starts: numpy.array
@@ -247,7 +257,7 @@ def vrange(starts, lengths):
 
 
 def init_results_element(net, element, output, all_float):
-    """
+    """Initialize the results table for an element type.
 
     :param net: The pandapipes network
     :type net: pandapipesNet
@@ -270,7 +280,7 @@ def init_results_element(net, element, output, all_float):
 
 
 def add_new_component(net, component, overwrite=False):
-    """
+    """Add a new component to the net, creating its table if necessary.
 
     :param net:
     :type net:
@@ -340,8 +350,7 @@ def standard_branch_wo_internals_result_lookup(net):
 
 
 def get_component_array(net, component_name, component_type="branch", mode='hydraulics', only_active=True):
-    """
-    Returns the internal array of a component.
+    """Returns the internal array of a component.
 
     :param net: The pandapipes network
     :type net: pandapipesNet

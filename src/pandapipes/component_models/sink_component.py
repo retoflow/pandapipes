@@ -6,9 +6,7 @@ from pandapipes.component_models.abstract_models.const_flow_models import ConstF
 
 
 class Sink(ConstFlow):
-    """
-
-    """
+    """Sink component that removes mass from a junction."""
 
     @classmethod
     def table_name(cls):

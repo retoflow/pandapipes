@@ -12,8 +12,7 @@ from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nod
 
 def calculate_mixture_viscosity(components_viscosities, components_molar_proportions,
                                 components_molar_mass):
-    """
-    Todo: Fill out parameters.
+    """Todo: Fill out parameters.
 
     :param components_viscosities:
     :type components_viscosities:
@@ -45,8 +44,7 @@ def calculate_mixture_viscosity(components_viscosities, components_molar_proport
 
 
 def calculate_mixture_density(components_density, components_mass_proportions):
-    """
-    Todo: Fill out parameters.
+    """Todo: Fill out parameters.
 
     :param components_density:
     :type components_density:
@@ -72,8 +70,7 @@ def calculate_mixture_density(components_density, components_mass_proportions):
 
 
 def calculate_mixture_heat_capacity(components_capacity, components_mass_proportions):
-    """
-    Todo: Fill out parameters.
+    """Todo: Fill out parameters.
 
     :param components_capacity:
     :type components_capacity:
@@ -100,8 +97,7 @@ def calculate_mixture_heat_capacity(components_capacity, components_mass_proport
 
 def calculate_mixture_molar_mass(components_molar_mass, components_molar_proportions=None,
                                  components_mass_proportions=None):
-    """
-    Todo: Fill out parameters.
+    """Todo: Fill out parameters.
 
     :param components_molar_mass:
     :type components_molar_mass:
@@ -131,8 +127,7 @@ def calculate_mixture_molar_mass(components_molar_mass, components_molar_proport
 
 
 def calculate_mass_fraction_from_molar_fraction(component_molar_proportions, component_molar_mass):
-    """
-    Todo: Fill out parameters.
+    """Todo: Fill out parameters.
 
     :param component_molar_proportions:
     :type component_molar_proportions:

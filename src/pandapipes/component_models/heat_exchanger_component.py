@@ -160,8 +160,7 @@ class HeatExchanger(BranchWOInternalsComponent):
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
-        """
-        Class method to extract pipeflow results from the internal structure into the results table.
+        """Class method to extract pipeflow results from the internal structure into the results table.
 
         :param net: The pandapipes network
         :type net: pandapipesNet

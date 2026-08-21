@@ -258,11 +258,11 @@ def calc_medium_pressure_with_derivative_np(p_init_i_abs, p_init_i1_abs):
 
 
 def colebrook_np(re, d, k, lambda_nikuradse, max_iter, lengths, tolerance=1e-4):
-    """
-    Function calculates the friction factor of a pipe using the Colebrook-White equation. It is an
-    implicit equation which is solved using the Newton-Raphson method. For pipes with zero flow or
-    zero length, the initial guess is returned. This should be uncritical, as the pressure loss
-    term will equal zero (lambda * u^2 * l / d).
+    """Function calculates the friction factor of a pipe using the Colebrook-White equation.
+
+    It is an implicit equation which is solved using the Newton-Raphson method. For pipes with
+    zero flow or zero length, the initial guess is returned. This should be uncritical, as the
+    pressure loss term will equal zero (lambda * u^2 * l / d).
 
     :param re: Reynolds number [dimensionless]
     :type re: np.array
@@ -283,7 +283,6 @@ def colebrook_np(re, d, k, lambda_nikuradse, max_iter, lengths, tolerance=1e-4):
     2. converged: True, if the Colebrook-White calculation converged for all pipes
     :rtype: (np.array, bool)
     """
-
     def colebrook_white_implicit(lambda_cb, re_nz, k_nz, d_nz):
         return lambda_cb ** (-1 / 2) + 2 * np.log10(2.51 / (re_nz * np.sqrt(lambda_cb)) + k_nz / (3.71 * d_nz))
 

@@ -7,9 +7,7 @@ from numpy import dtype
 
 
 class MassStorage(ConstFlow):
-    """
-
-    """
+    """Mass storage component that stores or releases mass at a junction."""
 
     @classmethod
     def table_name(cls):
@@ -25,7 +23,7 @@ class MassStorage(ConstFlow):
 
     @classmethod
     def get_component_input(cls):
-        """
+        """Get the component input columns for this table.
 
         :return:
         :rtype:

@@ -32,9 +32,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class Pipe(BranchWInternalsComponent):
-    """
-
-    """
+    """Pipe branch component with internal sections."""
 
     @classmethod
     def table_name(cls):
@@ -58,7 +56,7 @@ class Pipe(BranchWInternalsComponent):
 
     @classmethod
     def get_internal_node_number(cls, net, return_internal_only=True):
-        """
+        """Get the number of internal nodes per pipe.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -69,7 +67,7 @@ class Pipe(BranchWInternalsComponent):
 
     @classmethod
     def get_internal_branch_number(cls, net):
-        """
+        """Get the number of internal branches (sections) per pipe.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -80,7 +78,7 @@ class Pipe(BranchWInternalsComponent):
 
     @classmethod
     def get_component_input(cls):
-        """
+        """Get the component input columns for this table.
 
         :return:
         :rtype:
@@ -275,7 +273,7 @@ class Pipe(BranchWInternalsComponent):
 
     @classmethod
     def geodata(cls):
-        """
+        """Get geodata columns.
 
         :return:
         :rtype:
@@ -284,7 +282,7 @@ class Pipe(BranchWInternalsComponent):
 
     @classmethod
     def get_result_table(cls, net):
-        """
+        """Get the result table columns.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -329,9 +327,9 @@ class Pipe(BranchWInternalsComponent):
 
     @classmethod
     def get_internal_results(cls, net, pipe):
-        """
-        Retrieve velocity (at to/from node; mean), pressure and temperature of the internal sections
-        of pipes. The pipes have to have at least 2 internal sections.
+        """Retrieve velocity (at to/from node; mean), pressure and temperature of the internal sections of pipes.
+
+        The pipes have to have at least 2 internal sections.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -425,7 +423,7 @@ class Pipe(BranchWInternalsComponent):
 
     @classmethod
     def plot_pipe(cls, net, pipe, pipe_results):
-        """
+        """Plot pressure, velocity and temperature profiles along a pipe.
 
         :param net: The pandapipes network
         :type net: pandapipesNet

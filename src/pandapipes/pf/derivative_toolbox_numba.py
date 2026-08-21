@@ -439,10 +439,10 @@ def calc_medium_pressure_with_derivative_numba(p_init_i_abs, p_init_i1_abs):
 
 @jit((float64[:], float64[:], float64[:], float64[:], int64, float64[:], float64), nopython=True, cache=False)
 def colebrook_numba(re, d, k, lambda_nikuradse, max_iter, lengths, tolerance):
-    """
-    numba counterpart of derivative_toolbox.colebrook_np, for calc_lambda's use_numba=True
-    dispatch (imported there as ``colebrook_numba as colebrook``, mirroring ``colebrook_np as
-    colebrook`` on the non-numba side - both share this same positional signature) -
+    """Numba counterpart of derivative_toolbox.colebrook_np, for calc_lambda's use_numba=True dispatch.
+
+    Imported there as ``colebrook_numba as colebrook``, mirroring ``colebrook_np as
+    colebrook`` on the non-numba side - both share this same positional signature.
     scipy.optimize.newton (colebrook_np's own Newton solver) isn't numba-jittable, so this
     reimplements the same implicit equation
     ``lambda_cb**(-1/2) + 2*log10(2.51/(re*sqrt(lambda_cb)) + k/(3.71*d)) = 0`` as a hand-rolled,

@@ -9,8 +9,7 @@ from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
 
 
 def run_control(net, ctrl_variables=None, max_iter=30, **kwargs):
-    """
-    Function to run a control of the pandapipes network.
+    """Function to run a control of the pandapipes network.
 
     :param net: The pandapipes network
     :type net: pandapipesNet
@@ -29,8 +28,7 @@ def run_control(net, ctrl_variables=None, max_iter=30, **kwargs):
 
 
 def prepare_run_ctrl(net, ctrl_variables, **kwargs):
-    """
-    Function that defines default control variables.
+    """Function that defines default control variables.
 
     :param net: The pandapipes network
     :type net: pandapipesNet

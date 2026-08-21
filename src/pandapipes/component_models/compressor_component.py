@@ -13,9 +13,8 @@ from pandapipes.idx_node import IdxNode
 
 
 class Compressor(Pump):
-    """
+    """Compressor component that lifts pressure by a fixed pressure ratio."""
 
-    """
     PRESSURE_RATIO = 0
 
     internal_cols = 1

@@ -10,8 +10,7 @@ from pandapipes.topology.topology_toolbox import get_all_branch_component_table_
 
 def calc_distance_to_junction(net, junction, notravjunctions=None, nogojunctions=None,
                               weight="weight"):
-    """
-    Calculates the shortest distance between a source junction and all junctions connected to it.
+    """Calculates the shortest distance between a source junction and all junctions connected to it.
 
      INPUT:
         **net** (pandapipesNet) - Variable that contains a pandapipes network.
@@ -44,9 +43,7 @@ def calc_distance_to_junction(net, junction, notravjunctions=None, nogojunctions
 
 def calc_minimum_distance_to_junctions(net, junctions, notravjunctions=None, nogojunctions=None,
                                        weight="weight"):
-    """
-    Calculates the shortest distance between multiple source junctions and all junctions connected \
-    to it.
+    """Calculates the shortest distance between multiple source junctions and all junctions connected to it.
 
      INPUT:
         **net** (pandapipesNet) - Variable that contains a pandapipes network.
@@ -80,8 +77,7 @@ def calc_minimum_distance_to_junctions(net, junctions, notravjunctions=None, nog
 
 
 def calc_distance_to_junctions(net, junctions, respect_status_valves=True, notravjunctions=None, nogojunctions=None, weight="weight"):
-    """
-    Calculates the shortest distance between every source junction and all junctions connected to it.
+    """Calculates the shortest distance between every source junction and all junctions connected to it.
 
      INPUT:
         **net** (pandapipesNet) - Variable that contains a pandapipes network.
@@ -116,8 +112,7 @@ def calc_distance_to_junctions(net, junctions, respect_status_valves=True, notra
 
 
 def unsupplied_junctions(net, mg=None, slacks=None, respect_valves=True):
-    """
-     Finds junctions, that are not connected to an external grid.
+    """Finds junctions, that are not connected to an external grid.
 
      INPUT:
         **net** (pandapipesNet) - variable that contains a pandapipes network
@@ -142,7 +137,6 @@ def unsupplied_junctions(net, mg=None, slacks=None, respect_valves=True):
 
          top.unsupplied_junctions(net)
     """
-
     mg = mg or create_nxgraph(net, respect_status_valves=respect_valves)
     if slacks is None:
         slacks = set(net.ext_grid[net.ext_grid.in_service].junction.values)
@@ -154,8 +148,7 @@ def unsupplied_junctions(net, mg=None, slacks=None, respect_valves=True):
 
 
 def elements_on_path(mg, path, element="pipe", check_element_validity=True):
-    """
-     Finds all elements that connect a given path of junctions.
+    """Finds all elements that connect a given path of junctions.
 
      INPUT:
         **mg** (NetworkX graph) - NetworkX Graph or MultiGraph that represents a pandapipes network.

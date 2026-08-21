@@ -19,9 +19,7 @@ from pandapipes.pf.pipeflow_setup import add_table_lookup, get_table_number, \
 
 
 class Junction(NodeComponent):
-    """
-
-    """
+    """Junction node component."""
 
     @classmethod
     def table_name(cls):
@@ -29,7 +27,7 @@ class Junction(NodeComponent):
 
     @classmethod
     def get_component_input(cls):
-        """
+        """Get the component input columns for this table.
 
         :return:
         :rtype:
@@ -44,8 +42,7 @@ class Junction(NodeComponent):
     @classmethod
     def create_node_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start,
                             current_table, internals):
-        """
-        Function which creates node lookups.
+        """Create node lookups.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -139,7 +136,7 @@ class Junction(NodeComponent):
 
     @classmethod
     def geodata(cls):
-        """
+        """Get geodata columns.
 
         :return:
         :rtype:
@@ -148,7 +145,7 @@ class Junction(NodeComponent):
 
     @classmethod
     def get_result_table(cls, net):
-        """
+        """Get the result table columns.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -160,8 +157,7 @@ class Junction(NodeComponent):
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
-        """
-        Function that extracts certain results.
+        """Extract certain results.
 
         :param mode:
         :type mode:

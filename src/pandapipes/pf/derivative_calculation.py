@@ -10,9 +10,7 @@ from pandapipes.properties.properties_toolbox import get_branch_real_density, ge
 
 
 def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
-    """
-    Compute hydraulic derivatives for *branch_pit_slice* (a view of the global branch pit)
-    and write results back in-place via the view.
+    """Compute hydraulic derivatives for *branch_pit_slice* (a view of the global branch pit) and write results back in-place via the view.
 
     :param net: The pandapipes network
     :type net: pandapipesNet
@@ -80,8 +78,8 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
 
 
 def calculate_derivatives_branch_thermal(net, branch_pit_slice, node_pit, branch_pit_old_slice, options):
-    """
-    Compute branch-level thermal derivatives for *branch_pit_slice*.
+    """Compute branch-level thermal derivatives for *branch_pit_slice*.
+
     Stagnant node equations are excluded — see calculate_derivatives_node_thermal.
 
     :return: fnt, dfnt_dt, dfnt_dtout, fb, dfb_dt, dfb_dtout
@@ -121,8 +119,8 @@ def calculate_derivatives_branch_thermal(net, branch_pit_slice, node_pit, branch
 
 
 def calculate_derivatives_node_thermal(net, branch_pit, node_pit, node_pit_old, options):
-    """
-    Compute stagnant node thermal derivatives from the FULL active thermal branch pit.
+    """Compute stagnant node thermal derivatives from the FULL active thermal branch pit.
+
     Must be called with the complete branch pit so that nodes_flow is computed globally.
 
     :return: fn_node, dfn_dt  (arrays indexed by global node index)
@@ -155,8 +153,7 @@ def calculate_derivatives_node_thermal(net, branch_pit, node_pit, node_pit_old, 
 
 
 def calculate_load_hydraulic(net, loads, sign, junction_table_name):
-    """
-    Compute the aggregated nodal mass-flow loads for a ConstFlow-type component.
+    """Compute the aggregated nodal mass-flow loads for a ConstFlow-type component.
 
     Returns the active node-pit indices and the corresponding summed load values
     (sign-corrected, NaN-safe, filtered to hydraulically active nodes).
@@ -180,10 +177,11 @@ def get_derived_values(node_pit, from_nodes, to_nodes, use_numba):
 
 
 def calc_lambda(m, eta, d, k, gas_mode, friction_model, lengths, options, area):
-    """
-    Function calculates the friction factor of a pipe. Turbulence is calculated based on
-    Nikuradse. If v equals 0, a value of 0.001 is used in order to avoid division by zero.
-    This should not be a problem as the pressure loss term will equal zero (lambda * u^2).
+    """Function calculates the friction factor of a pipe.
+
+    Turbulence is calculated based on Nikuradse. If v equals 0, a value of 0.001 is used in order
+    to avoid division by zero. This should not be a problem as the pressure loss term will equal
+    zero (lambda * u^2).
 
     :param m:
     :type m:
@@ -242,10 +240,10 @@ def calc_lambda(m, eta, d, k, gas_mode, friction_model, lengths, options, area):
 
 
 def calc_der_lambda(m, eta, d, k, friction_model, lambda_pipe, area, re, lengths):
-    """
-    Function calculates the derivative of lambda with respect to v. Turbulence is calculated based
-    on Nikuradse. This should not be a problem as the pressure loss term will equal zero
-    (lambda * u^2).
+    """Function calculates the derivative of lambda with respect to v.
+
+    Turbulence is calculated based on Nikuradse. This should not be a problem as the pressure loss
+    term will equal zero (lambda * u^2).
 
     :param m:
     :type m:
@@ -264,7 +262,6 @@ def calc_der_lambda(m, eta, d, k, friction_model, lambda_pipe, area, re, lengths
     :return:
     :rtype:
     """
-
     b_term = np.zeros_like(m)
     df_dm = np.zeros_like(m)
     df_dlambda = np.zeros_like(m)

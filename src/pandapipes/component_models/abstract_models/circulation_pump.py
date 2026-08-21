@@ -83,9 +83,7 @@ class CirculationPump(BranchWOInternalsComponent):
 
     @classmethod
     def get_result_table(cls, net):
-        """
-
-        Gets the result table.
+        """Gets the result table.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -105,8 +103,7 @@ class CirculationPump(BranchWOInternalsComponent):
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
-        """
-        Function that extracts certain results.
+        """Function that extracts certain results.
 
         :param mode:
         :type mode:

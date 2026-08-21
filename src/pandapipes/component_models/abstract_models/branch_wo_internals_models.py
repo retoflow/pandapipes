@@ -41,8 +41,7 @@ class BranchWOInternalsComponent(BranchComponent):
 
     @classmethod
     def create_branch_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start, current_table, internals):
-        """
-        Function which creates branch lookups.
+        """Function which creates branch lookups.
 
         :param net: The pandapipes network
         :type net: pandapipesNet

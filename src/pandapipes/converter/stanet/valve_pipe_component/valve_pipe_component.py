@@ -53,10 +53,10 @@ class ValvePipe(Pipe):
 
     @classmethod
     def geodata(cls):
-        """
+        """Return the geodata columns for this component.
 
-        :return:
-        :rtype:
+        :return: column definitions
+        :rtype: list
         """
         return [("coords", dtype(object))]
 

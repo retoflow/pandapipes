@@ -28,9 +28,8 @@ from pandapipes.properties.fluids import get_fluid
 
 
 class PressureControlComponent(BranchWOInternalsComponent):
-    """
+    """Pressure control component enforcing a target pressure at a controlled junction."""
 
-    """
     JUNCTS = 0
     IN_SERVICE = 1
     CONTROLLED = 2

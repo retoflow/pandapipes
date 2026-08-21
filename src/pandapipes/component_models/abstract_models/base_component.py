@@ -20,7 +20,7 @@ class Component:
 
     @classmethod
     def get_component_input(cls):
-        """
+        """Get component input.
 
         :return:
         :rtype:
@@ -30,8 +30,7 @@ class Component:
     @classmethod
     def create_node_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start,
                             current_table, internals):
-        """
-        Function which creates node lookups.
+        """Function which creates node lookups.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -55,8 +54,7 @@ class Component:
     @classmethod
     def create_branch_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start,
                               current_table, internals):
-        """
-        Function which creates branch lookups.
+        """Function which creates branch lookups.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -87,9 +85,7 @@ class Component:
 
     @classmethod
     def create_component_array(cls, net, component_pits):
-        """
-        Function which creates an internal array of the component in analogy to the pit, but with
-        component specific entries, that are not needed in the pit.
+        """Function which creates an internal array of the component in analogy to the pit, but with component specific entries, that are not needed in the pit.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -118,8 +114,7 @@ class Component:
 
     @classmethod
     def init_results(cls, net):
-        """
-        Function that intializes the result table for the component.
+        """Function that intializes the result table for the component.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -132,8 +127,7 @@ class Component:
 
     @classmethod
     def get_result_table(cls, net):
-        """
-        Get result table.
+        """Get result table.
 
         :param net: a pandapipes net
         :type net: pandapipes.pandapipesNet
@@ -144,8 +138,7 @@ class Component:
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
-        """
-        Function that extracts certain results.
+        """Function that extracts certain results.
 
         :param net: The pandapipes network
         :type net: pandapipesNet

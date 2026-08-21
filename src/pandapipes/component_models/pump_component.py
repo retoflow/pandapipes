@@ -40,9 +40,8 @@ logger = logging.getLogger(__name__)
 
 
 class Pump(BranchWOInternalsComponent):
-    """
+    """Pump component that lifts pressure according to a characteristic curve."""
 
-    """
     STD_TYPE = 0
 
     internal_cols = 1

@@ -24,9 +24,8 @@ from pandapipes.pf.system_index import (
 
 
 class FlowControlComponent(BranchWOInternalsComponent):
-    """
+    """Flow control component that prescribes a fixed mass flow through a branch."""
 
-    """
     CONTROL_ACTIVE = 0
     CONTROLLED_MDOT = 1
 

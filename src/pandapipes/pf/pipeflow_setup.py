@@ -40,8 +40,7 @@ default_options = {"friction_model": "nikuradse", "tol_p": 1e-5, "tol_m": 1e-5,
 
 
 def get_net_option(net, option_name):
-    """
-    Returns the requested option of the given net. Raises a UserWarning if the option was not found.
+    """Returns the requested option of the given net. Raises a UserWarning if the option was not found.
 
     :param net: pandapipesNet for which option is requested
     :type net: pandapipesNet
@@ -56,9 +55,7 @@ def get_net_option(net, option_name):
 
 
 def get_net_options(net, *option_names):
-    """
-    Returns several requested options of the given net. Raises a UserWarning if any of the options
-    was not found.
+    """Returns several requested options of the given net. Raises a UserWarning if any of the options was not found.
 
     :param net: pandapipesNet for which option is requested
     :type net: pandapipesNet
@@ -70,8 +67,7 @@ def get_net_options(net, *option_names):
 
 
 def set_net_option(net, option_name, option_value):
-    """
-    Auxiliary function to set the value of a specific option (options are saved in a dict).
+    """Auxiliary function to set the value of a specific option (options are saved in a dict).
 
     :param net: pandapipesNet for which option shall be set
     :type net: pandapipesNet
@@ -84,9 +80,7 @@ def set_net_option(net, option_name, option_value):
 
 
 def add_table_lookup(table_lookup, table_name, table_number):
-    """
-    Auxiliary function to add a lookup between table name in the pandapipes net and table number in
-    the internal structure (pit).
+    """Auxiliary function to add a lookup between table name in the pandapipes net and table number in the internal structure (pit).
 
     :param table_lookup: The lookup dictionary from table names to internal number (n2t) and vice \
                 versa (t2n)
@@ -102,8 +96,7 @@ def add_table_lookup(table_lookup, table_name, table_number):
 
 
 def get_table_number(table_lookup, table_name):
-    """
-    Auxiliary function to retrieve the internal pit number for a given pandapipes net table name \
+    """Auxiliary function to retrieve the internal pit number for a given pandapipes net table name \
     from the table lookup.
 
     :param table_lookup: The lookup dictionary from table names to internal number (n2t) and vice \
@@ -120,8 +113,7 @@ def get_table_number(table_lookup, table_name):
 
 
 def get_table_name(table_lookup, table_number):
-    """
-    Auxiliary function to retrieve the pandapipes net table name for a given internal pit number \
+    """Auxiliary function to retrieve the pandapipes net table name for a given internal pit number \
     from the table lookup.
 
     :param table_lookup: The lookup dictionary from table names to internal number (n2t) and vice \
@@ -139,8 +131,7 @@ def get_table_name(table_lookup, table_number):
 
 
 def get_lookup(net, pit_type="node", lookup_type="index"):
-    """
-    Returns internal lookups which are mostly defined in the function `create_lookups`.
+    """Returns internal lookups which are mostly defined in the function `create_lookups`.
 
     :param net: The pandapipes net for which the lookup is requested
     :type net: pandapipesNet
@@ -172,12 +163,12 @@ def get_lookup(net, pit_type="node", lookup_type="index"):
 
 
 def set_user_pf_options(net, reset=False, **kwargs):
-    """
-    This function sets the "user_pf_options" dictionary for net. These options overrule
-    net._internal_options once they are added to net. These options are used in configuration of
-    load flow calculation.
-    At the same time, user-defined arguments for `pandapipes.pipeflow()` always have a higher
-    priority. To remove user_pf_options, set "reset = True" and provide no additional arguments.
+    """Set the "user_pf_options" dictionary for net.
+
+    These options overrule net._internal_options once they are added to net. These options are
+    used in configuration of load flow calculation. At the same time, user-defined arguments for
+    `pandapipes.pipeflow()` always have a higher priority. To remove user_pf_options, set
+    "reset = True" and provide no additional arguments.
 
     :param net: pandapipes network for which to create user options
     :type net: pandapipesNet
@@ -198,9 +189,7 @@ def set_user_pf_options(net, reset=False, **kwargs):
 
 
 def init_options(net, **kwargs):
-    """
-    Initializes physical and mathematical constants included in pandapipes. In addition, options
-    for the nonlinear and time-dependent solver are also set.
+    """Initializes physical and mathematical constants included in pandapipes. In addition, options for the nonlinear and time-dependent solver are also set.
 
     Those are the options that can be set and their default values:
 
@@ -326,8 +315,7 @@ def _mode_check(opts):
         opts["mode"] = "sequential"
 
 def create_internal_results(net):
-    """
-    Initializes a dictionary that shall contain some internal results later.
+    """Initializes a dictionary that shall contain some internal results later.
 
     :param net: pandapipes net to which internal result dict will be added
     :type net: pandapipesNet
@@ -337,9 +325,7 @@ def create_internal_results(net):
 
 
 def write_internal_results(net, **kwargs):
-    """
-    Adds specified values to the internal result dictionary of the given pandapipes net. If internal
-    results are not yet defined for the net, they are created as well.
+    """Adds specified values to the internal result dictionary of the given pandapipes net. If internal results are not yet defined for the net, they are created as well.
 
     :param net: pandapipes net for which to update internal result dict
     :type net: pandapipesNet
@@ -353,11 +339,10 @@ def write_internal_results(net, **kwargs):
 
 
 def _drop_pit_column(registry, col):
-    """
-    Remove all (row, col) entries targeting ``col`` from a PitRegistry, preserving any other
-    columns bundled in the same PitEntries. Used so a reused pit's already-solved values (e.g.
-    MDOTINIT/PINIT for a standalone heat-transfer run) aren't reset to fresh initial guesses by
-    component registration.
+    """Remove all (row, col) entries targeting ``col`` from a PitRegistry, preserving any other columns bundled in the same PitEntries.
+
+    Used so a reused pit's already-solved values (e.g. MDOTINIT/PINIT for a standalone
+    heat-transfer run) aren't reset to fresh initial guesses by component registration.
 
     :param registry: the PitRegistry to filter in place
     :type registry: pandapipes.pf.system_index.PitRegistry
@@ -374,10 +359,10 @@ def _drop_pit_column(registry, col):
 
 
 def initialize_pit(net):
-    """
-    Initializes and fills the internal structure which is called pit (pandapipes internal tables).
-    The structure is a dictionary which should contain one array for all nodes and one array for all
-    branches of the net (c.f. also `create_empty_pit`).
+    """Initializes and fills the internal structure which is called pit (pandapipes internal tables).
+
+    The structure is a dictionary which should contain one array for all nodes and one array for
+    all branches of the net (c.f. also `create_empty_pit`).
 
     :param net: The pandapipes network for which to create and fill the internal structure
     :type net: pandapipesNet
@@ -447,10 +432,10 @@ def initialize_pit(net):
         return
 
 def create_empty_pit(net):
-    """
-    Creates an empty internal structure which is called pit (pandapipes internal tables). The\
-    structure is a dictionary which should contain one array for all nodes and one array for all\
-    branches of the net. It is very often referred to within the pipeflow. So the structure in\
+    """Creates an empty internal structure which is called pit (pandapipes internal tables).
+
+    The structure is a dictionary which should contain one array for all nodes and one array for\
+    all branches of the net. It is very often referred to within the pipeflow. So the structure in\
     general looks like this:
 
     >>> net["_pit"] = {"node": np.array((no_nodes, col_nodes), dtype=np.float64),
@@ -472,9 +457,10 @@ def create_empty_pit(net):
     return pit
 
 def create_old_pit(net, required_node_cols=None, required_branch_cols=None):
-    """
-    Creates an empty internal partial structure of the given internal structure which is called \
-    old_pit (old pandapipes internal tables). The structure is a dictionary which should contain \
+    """Creates an empty internal partial structure of the given internal structure which is called \
+    old_pit (old pandapipes internal tables).
+
+    The structure is a dictionary which should contain \
     one array for all nodes and one array for all branches of the net. \
     In general looks like this:
 
@@ -508,8 +494,7 @@ def create_old_pit(net, required_node_cols=None, required_branch_cols=None):
     return pit
 
 def init_all_result_tables(net):
-    """
-    Initialize the result tables of all components in the net.
+    """Initialize the result tables of all components in the net.
 
     :param net: pandapipes net for which to extract results into net.res_xy
     :type net: pandapipesNet
@@ -521,8 +506,8 @@ def init_all_result_tables(net):
 
 
 def create_lookups(net):
-    """
-    Create all lookups necessary for the pipeflow of the given net.
+    """Create all lookups necessary for the pipeflow of the given net.
+
     The lookups are usually:
 
       - node_from_to: The start and end indices of all node component tables within the pit
@@ -579,11 +564,7 @@ def heat_transfer_slack_mask(net):
 
 
 def identify_active_nodes_branches(net, slack_mask, active_node_lookup=None, active_branch_lookup=None):
-    """
-    Create the connectivity lookup for nodes and branches. If the option "check_connectivity" is
-    set, a full connectivity check is performed based on a sparse matrix graph search starting
-    from the nodes marked by ``slack_mask``. Otherwise, just the "ACTIVE" identifier of the
-    respective components is used.
+    """Create the connectivity lookup for nodes and branches. If the option "check_connectivity" is set, a full connectivity check is performed based on a sparse matrix graph search starting from the nodes marked by ``slack_mask``. Otherwise, just the "ACTIVE" identifier of the respective components is used.
 
     Hydraulics and heat transfer only differ in which nodes count as slacks (see
     :func:`hydraulic_slack_mask` / :func:`heat_transfer_slack_mask`). Heat transfer additionally
@@ -703,9 +684,7 @@ def _connectivity(net, branch_pit, node_pit, active_branch_lookup, active_node_l
 
 
 def get_table_index_list(net, pit_array, pit_indices, pit_type="node"):
-    """
-    Auxiliary function to get a list of tables and the table indices that belong to a number of pit
-    indices.
+    """Auxiliary function to get a list of tables and the table indices that belong to a number of pit indices.
 
     :param net: pandapipes net for which the list is requested
     :type net: pandapipesNet
@@ -763,12 +742,7 @@ def reduce_lookups(net, comp_type, mode, comp_pit, active_pit, comp_pit_old, act
 
 
 def reduce_pit(net, mode):
-    """
-    Create an internal ("active") pit with all nodes and branches that are actually in_service. This
-    is also done for different lookups (e.g. the from_to indices for this pit and the node index
-    lookup). A specialty that needs to be considered is that from_nodes and to_nodes change to new
-    indices. Requires that the "node_active"/"branch_active" lookups have already been populated
-    by identify_active_nodes_branches.
+    """Create an internal ("active") pit with all nodes and branches that are actually in_service. This is also done for different lookups (e.g. the from_to indices for this pit and the node index lookup). A specialty that needs to be considered is that from_nodes and to_nodes change to new indices. Requires that the "node_active"/"branch_active" lookups have already been populated by identify_active_nodes_branches.
 
     :param net: The pandapipesNet for which the pit shall be reduced
     :type net: pandapipesNet
@@ -807,8 +781,7 @@ def reduce_pit(net, mode):
 
 
 def branches_not_zero_flow(branch_pit):
-    """
-    Simple function to identify branches with flow based on the calculated velocity.
+    """Simple function to identify branches with flow based on the calculated velocity.
 
     :param branch_pit: The pandapipes internal table of the network (including hydraulics results)
     :type branch_pit: np.array
@@ -820,8 +793,7 @@ def branches_not_zero_flow(branch_pit):
 
 
 def compute_infeed_nodes(branch_pit, node_pit):
-    """
-    Mark nodes that feed into the network (source nodes) in node_pit[:, INFEED].
+    """Mark nodes that feed into the network (source nodes) in node_pit[:, INFEED].
 
     A node is considered an infeed if it appears as a from-node of a branch with
     active flow but never as a to-node of any such branch. Must be called with the
@@ -848,7 +820,6 @@ def check_infeed_number(node_pit):
 
 
 class PipeflowNotConverged(ppException):
-    """
-    Exception being raised in case pipeflow did not converge.
-    """
+    """Exception being raised in case pipeflow did not converge."""
+
     pass

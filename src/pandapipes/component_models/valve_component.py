@@ -25,8 +25,8 @@ from pandapipes.pf.system_index import ComponentEquations, HydVarEq, PitEntries,
 
 
 class Valve(BranchWInternalsComponent):
-    """
-    Valves are branch elements that can separate two junctions.
+    """Valves are branch elements that can separate two junctions.
+
     They have a length of 0, but can introduce a lumped pressure loss.
     """
 

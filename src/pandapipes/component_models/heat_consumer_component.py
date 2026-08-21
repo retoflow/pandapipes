@@ -29,9 +29,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class HeatConsumer(BranchWOInternalsComponent):
-    """
+    """Heat consumer component that extracts heat via a prescribed qext, mass flow, temperature drop, or return temperature."""
 
-    """
     # columns for internal array
     MASS = 0
     QEXT = 1
@@ -66,9 +65,7 @@ class HeatConsumer(BranchWOInternalsComponent):
 
     @classmethod
     def get_component_input(cls):
-        """
-
-        Get component input.
+        """Get component input.
 
         :return:
         :rtype:
@@ -113,9 +110,7 @@ class HeatConsumer(BranchWOInternalsComponent):
 
     @classmethod
     def create_component_array(cls, net, component_pits):
-        """
-        Function which creates an internal array of the component in analogy to the pit, but with
-        component specific entries, that are not needed in the pit.
+        """Function which creates an internal array of the component in analogy to the pit, but with component specific entries, that are not needed in the pit.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -292,9 +287,7 @@ class HeatConsumer(BranchWOInternalsComponent):
 
     @classmethod
     def get_result_table(cls, net):
-        """
-
-        Gets the result table.
+        """Gets the result table.
 
         :param net: The pandapipes network
         :type net: pandapipesNet
@@ -314,7 +307,7 @@ class HeatConsumer(BranchWOInternalsComponent):
 
     @classmethod
     def extract_results(cls, net, options, branch_results, mode):
-        """
+        """Extract heat consumer results from the pipeflow internal structure.
 
         :param net:
         :type net:

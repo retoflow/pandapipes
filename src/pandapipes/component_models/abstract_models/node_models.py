@@ -13,9 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class NodeComponent(Component):
-    """
-
-    """
+    """Abstract base class for node components."""
 
     @classmethod
     def table_name(cls):
@@ -28,8 +26,7 @@ class NodeComponent(Component):
     @classmethod
     def create_node_lookups(cls, net, ft_lookups, table_lookup, idx_lookups, current_start,
                             current_table, internals):
-        """
-        Function which creates node lookups.
+        """Function which creates node lookups.
 
         :param net: The pandapipes network
         :type net: pandapipesNet

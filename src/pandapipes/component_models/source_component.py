@@ -6,9 +6,7 @@ from pandapipes.component_models.abstract_models.const_flow_models import ConstF
 
 
 class Source(ConstFlow):
-    """
-
-    """
+    """Source component that injects mass into a junction."""
 
     @classmethod
     def table_name(cls):

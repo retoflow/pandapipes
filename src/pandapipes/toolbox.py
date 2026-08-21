@@ -31,8 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def nets_equal(net1, net2, check_only_results=False, exclude_elms=None, **kwargs):
-    """
-    Compares the DataFrames of two networks.
+    """Compares the DataFrames of two networks.
 
     The networks are considered equal if they share the same keys and values, except of the 'et'
     (elapsed time) entry which differs depending on runtime conditions and entries stating with '_'.
@@ -50,7 +49,6 @@ def nets_equal(net1, net2, check_only_results=False, exclude_elms=None, **kwargs
     :return: True, if nets are equal
     :rtype: Bool
     """
-
     eq = isinstance(net1, pandapipesNet) and isinstance(net2, pandapipesNet)
     exclude_elms = [] if exclude_elms is None else list(exclude_elms)
     exclude_elms += ["res_" + ex for ex in exclude_elms]
@@ -91,9 +89,9 @@ def nets_equal(net1, net2, check_only_results=False, exclude_elms=None, **kwargs
 
 def element_junction_tuples(include_node_elements=True, include_branch_elements=True,
                             include_res_elements=False, net=None):
-    """
-    Utility function
-    Provides the tuples of elements and corresponding columns for junctions they are connected to
+    """Utility function.
+
+    Provides the tuples of elements and corresponding columns for junctions they are connected to.
 
     :param include_node_elements: whether tuples for junction elements e.g. sink, source, are \
            included
@@ -155,9 +153,9 @@ def element_junction_tuples(include_node_elements=True, include_branch_elements=
 
 def pp_elements(junction=True, include_node_elements=True, include_branch_elements=True,
                 include_res_elements=False, net=None):
-    """
-    Provides a list of all pandapipes elements belonging to the desired element types. If a net is
-    given, the elements are derived from the component list.
+    """Provides a list of all pandapipes elements belonging to the desired element types.
+
+    If a net is given, the elements are derived from the component list.
 
     :param junction: if True, return junction table name
     :type junction: bool, default True
@@ -173,7 +171,6 @@ def pp_elements(junction=True, include_node_elements=True, include_branch_elemen
     :return: pp_elms - set of table names for the desired element types
     :rtype: set
     """
-
     pp_elms = {"junction"} if junction else set()
     pp_elms |= set([el[0] for el in element_junction_tuples(
         include_node_elements, include_branch_elements, include_res_elements, net)])

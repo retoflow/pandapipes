@@ -4,10 +4,10 @@
 
 
 class IndexMeta(type):
-    """
-    Metaclass that collects a class's ``int``-valued attributes into an iterable
-    ``_indices`` dict, merging with any base classes' ``_indices`` (so subclasses
-    inherit and can extend their parent's index set).
+    """Metaclass that collects a class's ``int``-valued attributes into an iterable dict.
+
+    The resulting ``_indices`` dict is merged with any base classes' ``_indices`` (so
+    subclasses inherit and can extend their parent's index set).
     """
 
     def __new__(cls, name, bases, classdict):
@@ -25,6 +25,7 @@ class IndexMeta(type):
         return clsobj
 
     def __iter__(cls):
+        """Iterate over ``(name, value)`` pairs of the class's collected index attributes."""
         return iter(cls._indices.items())
 
     def keys(cls):

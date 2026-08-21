@@ -12,6 +12,7 @@ from pandapipes.idx_node import IdxNode
 
 class HydVarEq(str, Enum):
     """Variable and equation types for the hydraulic linear system."""
+
     NODE          = "NODE"
     BRANCH        = "BRANCH"
     SLACK         = "SLACK"
@@ -22,6 +23,7 @@ class HydVarEq(str, Enum):
 
 class ThermVarEq(str, Enum):
     """Variable and equation types for the thermal linear system."""
+
     NODE     = "NODE"
     BRANCH   = "BRANCH"
     TINIT    = "TINIT"
@@ -37,6 +39,7 @@ class EqWriteMode(str, Enum):
     MEAN:     mean of all load contributions to the same row (NaN-filtered);
               Jacobian entries averaged per unique (row, col) pair
     """
+
     UNIQUE   = "unique"
     ADDITIVE = "additive"
     MEAN     = "mean"
@@ -44,14 +47,14 @@ class EqWriteMode(str, Enum):
 
 @dataclass
 class ComponentEquations:
-    """
-    Sparse (COO format) contributions of one component to the global Jacobian and load vector.
+    """Sparse (COO format) contributions of one component to the global Jacobian and load vector.
 
     ADDITIVE (default): contributions accumulate, no conflict check.
     UNIQUE:  the component claims those rows exclusively; conflict check on registration,
              normal contributions to those rows are stripped in assemble.
     MEAN:    multiple contributions to the same row are averaged (NaN-filtered).
     """
+
     rows: np.ndarray      # int32, equation row indices (global)
     cols: np.ndarray      # int32, variable column indices (global)
     data: np.ndarray      # float64, Jacobian values
@@ -106,8 +109,7 @@ class ComponentRegistry:
         self.overrides.append(eq)
 
     def assemble(self, size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Build COO Jacobian entries and load vector from all registered components.
+        """Build COO Jacobian entries and load vector from all registered components.
 
         UNIQUE override rows are stripped from the normal pool.
         MEAN entries (both buckets combined) are averaged per (row, col) in the Jacobian
@@ -118,6 +120,7 @@ class ComponentRegistry:
         -------
         rows, cols, data : int32 / float64 arrays (COO format)
         load_vector      : float64 array of length *size*
+
         """
         unique_overrides = [ov for ov in self.overrides if ov.mode == EqWriteMode.UNIQUE]
         claimed = (
@@ -200,6 +203,7 @@ class PitWriteMode(str, Enum):
     ADDITIVE: values accumulated with np.add.at (default)
     MEAN:     mean of all values written to the same (row, col) position
     """
+
     UNIQUE   = "unique"
     ADDITIVE = "additive"
     MEAN     = "mean"
@@ -208,6 +212,7 @@ class PitWriteMode(str, Enum):
 @dataclass
 class PitEntries:
     """COO-format data for writing into a PIT (node or branch) array."""
+
     rows: np.ndarray  # int32, row indices into the PIT
     cols: np.ndarray  # int32, column indices into the PIT
     data: np.ndarray  # values to write
@@ -287,16 +292,19 @@ class BaseSystemIndex:
     """
 
     def __init__(self) -> None:
+        """Initialize an empty variable/equation block registry."""
         self._blocks: dict = {}
         self._size: int = 0
 
     def _block_key(self, key):
-        """Actual dict key ``_blocks`` is stored/looked-up under for variable/equation *key* -
-        overridable so subclasses can namespace keys (e.g. combined_pipeflow's
+        """Actual dict key ``_blocks`` is stored/looked-up under for variable/equation *key*.
+
+        Overridable so subclasses can namespace keys (e.g. combined_pipeflow's
         ``HydThermSystemIndex``, which needs ``HydVarEq.NODE`` and ``ThermVarEq.NODE`` to resolve
         to different blocks despite being equal as plain strings). All of ``idx``/``_register``/
         ``_register_sparse`` go through this, so overriding it here is enough - no need to
-        separately override each of them."""
+        separately override each of them.
+        """
         return key
 
     def idx(self, var, subset: np.ndarray | None = None) -> np.ndarray:
@@ -317,11 +325,13 @@ class BaseSystemIndex:
 
     def _register_sparse(self, key, full_size: int, node_indices: np.ndarray,
                          values: np.ndarray) -> None:
-        """Register a variable/equation block that only exists for a SUBSET of nodes (e.g.
-        MDOTSLACKINIT/SLACK, only defined at P-type nodes) - but size it like the FULL node
+        """Register a variable/equation block that only exists for a SUBSET of nodes.
+
+        E.g. MDOTSLACKINIT/SLACK, only defined at P-type nodes - but sized like the FULL node
         array (``full_size``), with -1 at every position outside ``node_indices``. This lets
         ``idx(key, some_node_indices)`` be called with raw node indices directly, exactly like
-        PINIT/NODE, instead of requiring callers to translate to a rank-within-subset first."""
+        PINIT/NODE, instead of requiring callers to translate to a rank-within-subset first.
+        """
         arr = np.full(full_size, -1, dtype=np.int32)
         arr[node_indices] = values
         self._blocks[self._block_key(key)] = arr
@@ -348,6 +358,7 @@ class HydraulicSystemIndex(BaseSystemIndex):
     """
 
     def __init__(self, node_pit: np.ndarray, branch_pit: np.ndarray) -> None:
+        """Build the variable/equation index for a hydraulic solve over *node_pit*/*branch_pit*."""
         super().__init__()
         self.slack_nodes = np.where(node_pit[:, IdxNode.NODE_TYPE] == IdxNode.P)[0].astype(np.int32)
 
