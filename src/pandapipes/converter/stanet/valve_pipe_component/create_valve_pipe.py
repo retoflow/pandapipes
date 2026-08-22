@@ -67,7 +67,8 @@ def create_valve_pipe(net, from_junction, to_junction, std_type, length_km, k_mm
     :return: index - The unique ID of the created valve pipe
     :rtype: int
 
-    EXAMPLE:
+    Example
+    -------
         create_valve_pipe(net, "valve_pipe1", from_junction=0, to_junction=1, std_type='315_PE_80_SDR_17',
                           length_km=1)
     """
@@ -150,7 +151,8 @@ def create_valve_pipe_from_parameters(net, from_junction, to_junction, length_km
     :return: index - The unique ID of the created valve pipe
     :rtype: int
 
-    EXAMPLE:
+    Example
+    -------
         create_valve_pipe_from_parameters(net, "valve_pipe1", from_junction=0, to_junction=1,
                                           length_km=1, d=4e-3)
     """

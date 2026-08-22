@@ -24,7 +24,8 @@ def set_logger_level_pipeflow(level):
     :type level: str
     :return: No output
 
-    EXAMPLE:
+    Example
+    -------
         set_logger_level_pipeflow('WARNING')
 
     """

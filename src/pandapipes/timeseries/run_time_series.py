@@ -111,13 +111,18 @@ def init_time_series(net, time_steps, continue_on_divergence=False, verbose=True
 
 
 def run_loop(net, ts_variables, run_control_fct=run_control, output_writer_fct=_call_output_writer, **kwargs):
-    """runs the time series loop which calls pp.runpp (or another run function) in each iteration.
+    """Run the time series loop which calls pp.runpp (or another run function) in each iteration.
 
     Parameters
     ----------
-    net - pandapower net
-    ts_variables - settings for time series
-
+    net : pandapipesNet
+        The pandapipes network to run the loop over.
+    ts_variables : dict
+        Settings for the time series run (as returned by ``init_time_series``).
+    run_control_fct : callable, default ``run_control``
+        Function called once per time step to run control loops.
+    output_writer_fct : callable, default ``_call_output_writer``
+        Function called once per time step to write results to the output writer.
     """
     for i, time_step in enumerate(ts_variables["time_steps"]):
         print_progress(i, time_step, ts_variables["time_steps"], ts_variables["verbose"], ts_variables=ts_variables,
