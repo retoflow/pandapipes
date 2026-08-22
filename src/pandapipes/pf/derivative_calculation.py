@@ -1,3 +1,13 @@
+# pylint: disable=import-outside-toplevel
+# Every local import below picks between a numba and a plain-numpy implementation based on a
+# runtime option (options["use_numba"]). This can't be hoisted to module level: when numba isn't
+# installed, derivative_toolbox_numba's @jit(...) decorators fall back to plain numpy types for
+# their explicit signatures (e.g. float64[:, :]), and numpy's own float64 doesn't support that
+# subscript syntax at all ("TypeError: There are no type variables left in numpy.float64" on
+# numpy>=2) - so importing that module eagerly would break `import pandapipes` outright whenever
+# numba isn't installed, not just waste time JIT-compiling functions nobody asked for. Verified by
+# actually trying it: any use_numba dispatch import from derivative_toolbox_numba hoisted to this
+# file's top level reproduces that exact crash immediately.
 import numpy as np
 from pandapipes.constants import NORMAL_TEMPERATURE
 from pandapipes.idx_branch import IdxBranch
