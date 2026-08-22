@@ -85,7 +85,9 @@ class Component:
 
     @classmethod
     def create_component_array(cls, net, component_pits):
-        """Function which creates an internal array of the component in analogy to the pit, but with component specific entries, that are not needed in the pit.
+        """Create an internal array of the component in analogy to the pit.
+
+        Holds component-specific entries that are not needed in the pit.
 
         :param net: The pandapipes network
         :type net: pandapipesNet

@@ -10,6 +10,7 @@ from pandapipes.component_models.component_toolbox import get_internal_lookup_st
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_lookup, get_table_number, get_net_option
+from pandapipes.pf.system_index import PitEntries
 
 try:
     import pandaplan.core.pplog as logging
@@ -128,7 +129,6 @@ class BranchWInternalsComponent(BranchComponent):
 
     @classmethod
     def register_pit_node_entries(cls, net, node_pit, registry) -> None:
-        from pandapipes.pf.system_index import PitEntries
         table_lookup = get_lookup(net, "node", "table")
         table_nr = get_table_number(table_lookup, cls.internal_node_name())
         if table_nr is None:
@@ -145,7 +145,6 @@ class BranchWInternalsComponent(BranchComponent):
 
     @classmethod
     def register_pit_branch_entries(cls, net, branch_pit, node_pit, registry) -> None:
-        from pandapipes.pf.system_index import PitEntries
         super().register_pit_branch_entries(net, branch_pit, node_pit, registry)
 
         f, t = get_lookup(net, "branch", "from_to")[cls.table_name()]

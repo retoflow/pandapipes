@@ -11,6 +11,7 @@ from scipy.sparse import coo_matrix, csgraph
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
 from pandapipes.properties.fluids import get_fluid
+from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.system_index import PitEntries, PitRegistry
 
 try:
@@ -326,7 +327,9 @@ def create_internal_results(net):
 
 
 def write_internal_results(net, **kwargs):
-    """Adds specified values to the internal result dictionary of the given pandapipes net. If internal results are not yet defined for the net, they are created as well.
+    """Add specified values to the internal result dictionary of the given pandapipes net.
+
+    If internal results are not yet defined for the net, they are created as well.
 
     :param net: pandapipes net for which to update internal result dict
     :type net: pandapipesNet
@@ -563,7 +566,11 @@ def heat_transfer_slack_mask(net):
 
 
 def identify_active_nodes_branches(net, slack_mask, active_node_lookup=None, active_branch_lookup=None):
-    """Create the connectivity lookup for nodes and branches. If the option "check_connectivity" is set, a full connectivity check is performed based on a sparse matrix graph search starting from the nodes marked by ``slack_mask``. Otherwise, just the "ACTIVE" identifier of the respective components is used.
+    """Create the connectivity lookup for nodes and branches.
+
+    If the option "check_connectivity" is set, a full connectivity check is performed based on a
+    sparse matrix graph search starting from the nodes marked by ``slack_mask``. Otherwise, just
+    the "ACTIVE" identifier of the respective components is used.
 
     Hydraulics and heat transfer only differ in which nodes count as slacks (see
     :func:`hydraulic_slack_mask` / :func:`heat_transfer_slack_mask`). Heat transfer additionally
@@ -662,19 +669,19 @@ def _connectivity(net, branch_pit, node_pit, active_branch_lookup, active_node_l
     is_nodes = np.where(nodes_connected & ~active_node_lookup)[0]
 
     if len(oos_nodes) > 0:
-        msg = "\n".join("In table %s: %s" % (tbl, nds) for tbl, nds in
+        msg = "\n".join(f"In table {tbl}: {nds}" for tbl, nds in
                         get_table_index_list(net, node_pit, oos_nodes))
         logger.info("Setting the following nodes out of service in connectivity"
                     " check:\n%s", msg)
 
     if len(is_nodes) > 0:
-        node_type_message = "\n".join("In table %s: %s" % (tbl, nds) for tbl, nds in
+        node_type_message = "\n".join(f"In table {tbl}: {nds}" for tbl, nds in
                                       get_table_index_list(net, node_pit, is_nodes))
         if get_net_option(net, "quit_on_inconsistency_connectivity"):
             raise UserWarning(
                 "The following nodes are connected to in_service branches "
                 "although being out of service, which leads to an inconsistency in the connectivity"
-                " check!\n%s" % node_type_message)
+                f" check!\n{node_type_message}")
         logger.info("Setting the following nodes back in service in connectivity"
                     " check as they are connected to in_service branches:\n%s",
                     node_type_message)
@@ -741,7 +748,12 @@ def reduce_lookups(net, comp_type, mode, comp_pit, active_pit, comp_pit_old, act
 
 
 def reduce_pit(net, mode):
-    """Create an internal ("active") pit with all nodes and branches that are actually in_service. This is also done for different lookups (e.g. the from_to indices for this pit and the node index lookup). A specialty that needs to be considered is that from_nodes and to_nodes change to new indices. Requires that the "node_active"/"branch_active" lookups have already been populated by identify_active_nodes_branches.
+    """Create an internal ("active") pit with all nodes and branches that are actually in_service.
+
+    This is also done for different lookups (e.g. the from_to indices for this pit and the node
+    index lookup). A specialty that needs to be considered is that from_nodes and to_nodes change
+    to new indices. Requires that the "node_active"/"branch_active" lookups have already been
+    populated by identify_active_nodes_branches.
 
     :param net: The pandapipesNet for which the pit shall be reduced
     :type net: pandapipesNet
@@ -799,8 +811,6 @@ def compute_infeed_nodes(branch_pit, node_pit):
     global branch_pit (not a per-component slice) so that cross-component topology
     is taken into account.
     """
-    from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
-
     branches_flow = branches_not_zero_flow(branch_pit)
     from_nodes = get_from_nodes_corrected(branch_pit)
     to_nodes = get_to_nodes_corrected(branch_pit)

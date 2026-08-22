@@ -154,8 +154,8 @@ class Calculation:
 
         write_internal_results(net, **errors)
         kwargs = {
-            'residual_norm_%s' % self.MODE: residual_norm,
-            'iterations_%s' % self.MODE: niter,
+            f'residual_norm_{self.MODE}': residual_norm,
+            f'iterations_{self.MODE}': niter,
         }
         write_internal_results(net, **kwargs)
         self._log_final_results(net, niter, residual_norm, tols)

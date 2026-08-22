@@ -8,6 +8,7 @@ from pandapipes.component_models.abstract_models.branch_models import BranchComp
 from pandapipes.component_models.component_toolbox import build_pit_entries
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_net_option, get_lookup
+from pandapipes.pf.system_index import PitEntries
 
 try:
     import pandaplan.core.pplog as logging
@@ -67,7 +68,6 @@ class BranchWOInternalsComponent(BranchComponent):
 
     @classmethod
     def register_pit_branch_entries(cls, net, branch_pit, node_pit, registry) -> None:
-        from pandapipes.pf.system_index import PitEntries
         super().register_pit_branch_entries(net, branch_pit, node_pit, registry)
 
         f, t = get_lookup(net, "branch", "from_to")[cls.table_name()]
@@ -90,7 +90,9 @@ class BranchWOInternalsComponent(BranchComponent):
             d_val = 0.1
             registry.add(PitEntries(*build_pit_entries(
                 rows,
-                [IdxBranch.FROM_NODE, IdxBranch.TO_NODE, IdxBranch.TOUTINIT, IdxBranch.ELEMENT_IDX, IdxBranch.ACTIVE, IdxBranch.LENGTH, IdxBranch.K, IdxBranch.TEXT, IdxBranch.ALPHA, IdxBranch.D, IdxBranch.DO],
+                [IdxBranch.FROM_NODE, IdxBranch.TO_NODE, IdxBranch.TOUTINIT, IdxBranch.ELEMENT_IDX,
+                 IdxBranch.ACTIVE, IdxBranch.LENGTH, IdxBranch.K, IdxBranch.TEXT, IdxBranch.ALPHA,
+                 IdxBranch.D, IdxBranch.DO],
                 [from_nodes.astype(float), to_nodes.astype(float), toutinit_vals,
                  tbl.index.values.astype(float), tbl[cls.active_identifier()].values.astype(float),
                  0., 1e-3, float(ambient_t), 0., d_val, d_val],

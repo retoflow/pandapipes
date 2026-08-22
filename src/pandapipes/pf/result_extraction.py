@@ -255,10 +255,10 @@ def extract_branch_results_with_internals(net, branch_results, table_name,
 
 def extract_branch_results_without_internals(net, branch_results, required_results_hydraulic,
                                              required_results_heat, table_name, simulation_mode):
-    """Extract the results from the branch result array derived from the pit to the result table of the net (only for branch components without internal nodes).
+    """Extract the branch results derived from the pit into the net's result table.
 
-    Here, we need to consider which results exist for hydraulic calculation and for heat transfer
-    calculation (wrt. connectivity).
+    Only for branch components without internal nodes. Here, we need to consider which results
+    exist for hydraulic calculation and for heat transfer calculation (wrt. connectivity).
 
     :param net: The pandapipes net that the internal structure belongs to
     :type net: pandapipesNet
