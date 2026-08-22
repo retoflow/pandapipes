@@ -11,8 +11,7 @@ from warnings import warn
 
 
 def pressure_profile_to_junction_geodata(net):
-    """
-    Calculates pressure profile for a pandapipes network.
+    """Calculates pressure profile for a pandapipes network.
 
      INPUT:
         **net** (pandapipesNet) - Variable that contains a pandapipes network.

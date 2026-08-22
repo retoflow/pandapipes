@@ -178,9 +178,7 @@ def pp_elements(junction=True, include_node_elements=True, include_branch_elemen
 
 
 def reindex_junctions(net, junction_lookup):
-    """
-    Changes the index of net.junction and considers the new junction indices in all other
-    pandapipes element tables.
+    """Changes the index of net.junction and considers the new junction indices in all other pandapipes element tables.
 
     :param net: pandapipes network
     :type net: pandapipesNet
@@ -190,14 +188,12 @@ def reindex_junctions(net, junction_lookup):
     :return: junction_lookup - the finally reindexed junction lookup (with corrections if necessary)
     :rtype: dict
     """
-
     junction_lookup = reindex_elements(net, "junction", lookup=junction_lookup)
     return junction_lookup
 
 
 def reindex_pipes(net, pipe_lookup):
-    """
-    Changes the index of net.pipe and considers the new pipe indices in pandapipes valve table.
+    """Changes the index of net.pipe and considers the new pipe indices in pandapipes valve table.
 
     :param net: pandapipes network
     :type net: pandapipesNet
@@ -207,14 +203,12 @@ def reindex_pipes(net, pipe_lookup):
     :return: pipe_lookup - the finally reindexed pipe lookup (with corrections if necessary)
     :rtype: dict
     """
-
     pipe_lookup = reindex_elements(net, "pipe", lookup=pipe_lookup)
     return pipe_lookup
 
 
 def reindex_elements(net, element, lookup):
-    """
-    Changes the index of net[element].
+    """Changes the index of net[element].
 
     :param net: pandapipes network
     :type net: pandapipesNet
@@ -224,7 +218,6 @@ def reindex_elements(net, element, lookup):
     :type lookup: dict
     :return: No output.
     """
-
     if element not in net:
         return lookup
     not_fitting_lookup_keys = set(lookup.keys()) - set(net[element].index)
@@ -266,9 +259,7 @@ def reindex_elements(net, element, lookup):
     return lookup
 
 def create_continuous_junction_index(net, start=0, store_old_index=False):
-    """
-    Creates a continuous junction index starting at 'start' and replaces all
-    references of old indices by the new ones.
+    """Creates a continuous junction index starting at 'start' and replaces all references of old indices by the new ones.
 
     :param net: pandapipes network
     :type net: pandapipesNet
@@ -283,9 +274,7 @@ def create_continuous_junction_index(net, start=0, store_old_index=False):
     return junction_lookup
 
 def create_continuous_element_index(net, element, start=0, store_old_index=False):
-    """
-    Creates a continuous element index starting at 'start' and replaces all
-    references of old indices by the new ones.
+    """Creates a continuous element index starting at 'start' and replaces all references of old indices by the new ones.
 
     :param net: pandapipes network
     :type net: pandapipesNet
@@ -312,9 +301,7 @@ def create_continuous_element_index(net, element, start=0, store_old_index=False
     return lookup
 
 def create_continuous_elements_index(net, start=0, add_df_to_reindex=None, store_old_index=False):
-    """
-    Creating a continuous index for all the elements and replaces all references
-    of old indices by the new ones.
+    """Creating a continuous index for all the elements and replaces all references of old indices by the new ones.
 
     :param net: pandapipes network with unodered indices
     :type net: pandapipesNet
@@ -344,9 +331,9 @@ def create_continuous_elements_index(net, start=0, add_df_to_reindex=None, store
 
 
 def fuse_junctions(net, j1, j2, drop=True):
-    """
-    Reroutes any connections to junctions in j2 to the given junction j1. Additionally drops the
-    junctions j2, if drop=True (default).
+    """Reroutes any connections to junctions in j2 to the given junction j1.
+
+    Additionally drops the junctions j2, if drop=True (default).
 
     :param net: pandapipes network
     :type net: pandapipesNet
@@ -374,10 +361,7 @@ def fuse_junctions(net, j1, j2, drop=True):
 
 def select_subnet(net, junctions, include_results=False, keep_everything_else=False,
                   remove_internals=True, remove_unused_components=False):
-    """
-    Selects a subnet by a list of junction indices and returns a net with all components connected
-    to them.
-    """
+    """Selects a subnet by a list of junction indices and returns a net with all components connected to them."""
     junctions = list(junctions)
 
     if keep_everything_else:
@@ -438,9 +422,7 @@ def remove_empty_components(net):
 
 
 def drop_junctions(net, junctions, drop_elements=True):
-    """
-    Drops specified junctions, their junction_geodata and by default drops all elements connected to
-    them as well.
+    """Drops specified junctions, their junction_geodata and by default drops all elements connected to them as well.
 
     :param net: pandapipes network
     :type net: pandapipesNet
@@ -460,8 +442,7 @@ def drop_junctions(net, junctions, drop_elements=True):
 
 
 def drop_elements_at_junctions(net, junctions, node_elements=True, branch_elements=True):
-    """
-    drop elements connected to given junctions
+    """Drop elements connected to given junctions.
 
     :param net: pandapipes network
     :type net: pandapipesNet
@@ -495,8 +476,7 @@ def drop_elements_at_junctions(net, junctions, node_elements=True, branch_elemen
 
 
 def drop_pipes(net, pipes):
-    """
-    Deletes all pipes and their geodata in the given list of indices.
+    """Deletes all pipes and their geodata in the given list of indices.
 
     :param net: pandapipes network
     :type net: pandapipesNet
@@ -548,8 +528,7 @@ bool_cols = ["ACTIVE"]
 
 
 def get_pit_lookup(pit_type="node"):
-    """
-    Retrieve a lookup for "indices" and "types" from the idx_branch or idx_node files.
+    """Retrieve a lookup for "indices" and "types" from the idx_branch or idx_node files.
 
     :param pit_type: the pit for which the lookup is generated ("branch" or "node")
     :type pit_type: str, default "node"
@@ -577,8 +556,7 @@ def get_pit_lookup(pit_type="node"):
 
 
 def get_internal_tables_pandas(net, convert_types=True):
-    """
-    Convert the internal structure (pit) for nodes and branches into readable pandas DataFrames.
+    """Convert the internal structure (pit) for nodes and branches into readable pandas DataFrames.
 
     :param net: pandapipes network
     :type net: pandapipesNet

@@ -73,8 +73,7 @@ class ComponentEquations:
 
 @dataclass
 class ComponentRegistry:
-    """
-    Two-bucket registry for component equations.
+    """Two-bucket registry for component equations.
 
     normal:    equations that accumulate (COO summing)
     overrides: equations written after normal; UNIQUE overrides strip normal
@@ -83,6 +82,7 @@ class ComponentRegistry:
     UNIQUE entries trigger a row-conflict check against previously registered UNIQUE
     entries in the same bucket (add → normal, add_override → overrides).
     """
+
     normal:    list[ComponentEquations] = field(default_factory=list)
     overrides: list[ComponentEquations] = field(default_factory=list)
 
@@ -221,8 +221,7 @@ class PitEntries:
 
 @dataclass
 class PitRegistry:
-    """
-    Two-bucket registry for PIT initialization.
+    """Two-bucket registry for PIT initialization.
 
     normal:    base entries written first
     overrides: entries written second, winning over normal entries at the same positions
@@ -230,6 +229,7 @@ class PitRegistry:
     UNIQUE entries trigger a (row, col) conflict check against all previously registered
     UNIQUE entries in both buckets.
     """
+
     normal:    list[PitEntries] = field(default_factory=list)
     overrides: list[PitEntries] = field(default_factory=list)
 
@@ -283,8 +283,7 @@ class PitRegistry:
 
 
 class BaseSystemIndex:
-    """
-    Central registry of all variables and equations in the linear system.
+    """Central registry of all variables and equations in the linear system.
 
     Variables and equations are registered via ``_register()`` using ``HydVarEq``
     (or integer PIT constants for thermal) as keys.  In this square system each
@@ -340,8 +339,7 @@ class BaseSystemIndex:
 
 
 class HydraulicSystemIndex(BaseSystemIndex):
-    """
-    Variable / equation registry for the hydraulic solve.
+    """Variable / equation registry for the hydraulic solve.
 
     Layout (columns = rows in square system):
         0 .. len_n-1             PINIT / NODE          pressure / node mass-balance
@@ -377,8 +375,7 @@ class HydraulicSystemIndex(BaseSystemIndex):
 
 
 class HeatSystemIndex(BaseSystemIndex):
-    """
-    Variable / equation registry for the thermal solve.
+    """Variable / equation registry for the thermal solve.
 
     Layout (columns = rows in square system):
         0 .. len_n-1             TINIT / NODE    node temperature / node energy balance
@@ -386,6 +383,7 @@ class HeatSystemIndex(BaseSystemIndex):
     """
 
     def __init__(self, node_pit: np.ndarray, branch_pit: np.ndarray) -> None:
+        """Build the variable/equation index for a thermal solve over *node_pit*/*branch_pit*."""
         super().__init__()
         self.slack_nodes = np.where(node_pit[:, IdxNode.NODE_TYPE_T] == IdxNode.T)[0].astype(np.int32)
 

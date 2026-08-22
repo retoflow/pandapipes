@@ -11,6 +11,7 @@ class IndexMeta(type):
     """
 
     def __new__(cls, name, bases, classdict):
+        """Create the class and collect its int-valued attributes into a merged ``_indices`` dict."""
         clsobj = super().__new__(cls, name, bases, classdict)
 
         clsobj._indices = {

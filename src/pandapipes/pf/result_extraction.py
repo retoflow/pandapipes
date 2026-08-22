@@ -26,8 +26,7 @@ NODE_PAMB = IdxNode.PAMB
 
 
 def extract_all_results(net):
-    """
-    Extract results from branch pit and node pit and write them to the different tables of the net,\
+    """Extract results from branch pit and node pit and write them to the different tables of the net,\
     as defined by the component models.
 
     :param net: pandapipes net for which to extract results into net.res_xy
@@ -256,10 +255,10 @@ def extract_branch_results_with_internals(net, branch_results, table_name,
 
 def extract_branch_results_without_internals(net, branch_results, required_results_hydraulic,
                                              required_results_heat, table_name, simulation_mode):
-    """
-    Extract the results from the branch result array derived from the pit to the result table of the
-    net (only for branch components without internal nodes). Here, we need to consider which results
-    exist for hydraulic calculation and for heat transfer calculation (wrt. connectivity).
+    """Extract the results from the branch result array derived from the pit to the result table of the net (only for branch components without internal nodes).
+
+    Here, we need to consider which results exist for hydraulic calculation and for heat transfer
+    calculation (wrt. connectivity).
 
     :param net: The pandapipes net that the internal structure belongs to
     :type net: pandapipesNet
@@ -304,9 +303,7 @@ def extract_branch_results_without_internals(net, branch_results, required_resul
 
 
 def extract_results_active_pit_hydraulics(net):
-    """
-    Extract the hydraulic pipeflow results from the internal pit structure ("_active_pit") to the
-    general pit structure.
+    """Extract the hydraulic pipeflow results from the internal pit structure ("_active_pit") to the general pit structure.
 
     :param net: The pandapipes net that the internal structure belongs to
     :type net: pandapipesNet
@@ -332,9 +329,7 @@ def extract_results_active_pit_hydraulics(net):
 
 
 def extract_results_active_pit_heat_transfer(net):
-    """
-    Extract the heat transfer pipeflow results from the internal pit structure ("_active_pit") to
-    the general pit structure.
+    """Extract the heat transfer pipeflow results from the internal pit structure ("_active_pit") to the general pit structure.
 
     :param net: The pandapipes net that the internal structure belongs to
     :type net: pandapipesNet

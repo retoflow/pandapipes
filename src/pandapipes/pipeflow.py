@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 def set_logger_level_pipeflow(level):
-    """
-    Set logger level from outside to reduce/extend pipeflow() printout.
+    """Set logger level from outside to reduce/extend pipeflow() printout.
+
     :param level: levels according to 'logging' (i.e. DEBUG, INFO, WARNING, ERROR and CRITICAL)
     :type level: str
     :return: No output
@@ -32,8 +32,7 @@ def set_logger_level_pipeflow(level):
 
 
 def pipeflow(net, **kwargs):
-    """
-    The main method used to start the solver to calculate the velocity, pressure and temperature\
+    """The main method used to start the solver to calculate the velocity, pressure and temperature\
     distribution for a given net. Different options can be entered for \\**kwargs, which control\
     the solver behaviour (see function :func:`init_options` for more information).
 
@@ -54,9 +53,7 @@ def pipeflow(net, **kwargs):
 
 
 def  init_pipeflow(net, **kwargs):
-    """
-    Inputs & initialization of variables: physical constants/options, result tables,
-    lookups and the internal PIT (pandapipes internal tables) arrays.
+    """Inputs & initialization of variables: physical constants/options, result tables, lookups and the internal PIT (pandapipes internal tables) arrays.
 
     :param net: The pandapipes net for which to perform the pipeflow
     :type net: pandapipesNet
