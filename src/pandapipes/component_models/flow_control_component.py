@@ -16,6 +16,7 @@ from pandapipes.idx_branch import IdxBranch
 from pandapipes.pf.derivative_calculation import (
     calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal,
 )
+from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup
 from pandapipes.pf.result_extraction import extract_branch_results_without_internals
 from pandapipes.pf.system_index import (
@@ -150,7 +151,6 @@ class FlowControlComponent(BranchWOInternalsComponent):
 
     @classmethod
     def register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
-        from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
         f, t = get_lookup(net, "branch", "from_to_active_heat_transfer")[cls.table_name()]
         branch_idx = np.arange(f, t, dtype=np.int32)
         if not len(branch_idx):

@@ -11,6 +11,7 @@ from scipy.sparse import coo_matrix, csgraph
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
 from pandapipes.properties.fluids import get_fluid
+from pandapipes.pf.system_index import PitEntries, PitRegistry
 
 try:
     import numba
@@ -152,12 +153,12 @@ def get_lookup(net, pit_type="node", lookup_type="index"):
                         "index_active_hydraulics", "index_active_heat_transfer", "old_pit_cols"]
     if lookup_type not in all_lookup_types:
         type_names = "', '".join(all_lookup_types)
-        logger.error("No lookup type '%s' exists. Please choose one of '%s'."
-                     % (lookup_type, type_names))
+        logger.error("No lookup type '%s' exists. Please choose one of '%s'.",
+                     lookup_type, type_names)
         return None
     if pit_type not in ["node", "branch"]:
-        logger.error("No pit type '%s' exists. Please choose one of 'node' and 'branch'."
-                     % pit_type)
+        logger.error("No pit type '%s' exists. Please choose one of 'node' and 'branch'.",
+                     pit_type)
         return None
     return net["_lookups"]["%s_%s" % (pit_type, lookup_type)]
 
@@ -182,8 +183,8 @@ def set_user_pf_options(net, reset=False, **kwargs):
 
     additional_kwargs = set(kwargs.keys()) - set(default_options.keys()) - {"fluid"}
     if len(additional_kwargs) > 0:
-        logger.info('parameters %s are not in the list of standard options'
-                    % list(additional_kwargs))
+        logger.info('parameters %s are not in the list of standard options',
+                    list(additional_kwargs))
 
     net.user_pf_options.update(kwargs)
 
@@ -350,7 +351,6 @@ def _drop_pit_column(registry, col):
     :type col: int
     :return: No output
     """
-    from pandapipes.pf.system_index import PitEntries
     for bucket in (registry.normal, registry.overrides):
         for i, e in enumerate(bucket):
             keep = e.cols != col
@@ -375,7 +375,7 @@ def initialize_pit(net):
     ):
         create_lookups(net)
         if get_net_option(net, "mode") == "heat":
-            if not "_pit" in net:
+            if "_pit" not in net:
                 raise UserWarning("There are no hydraulic results given!")
             # net.converged reflects the outcome of whichever hydraulics run last populated
             # "_pit" (Calculation.run() sets it at the start and updates it every iteration of
@@ -400,7 +400,6 @@ def initialize_pit(net):
     if get_net_option(net, "transient") and get_net_option(net,"simulation_time_step") != 0 and net.converged:
         create_old_pit(net, [IdxNode.TINIT], [IdxBranch.TOUTINIT])
 
-    from pandapipes.pf.system_index import PitRegistry
     node_pit = pit["node"]
     branch_pit = pit["branch"]
 
@@ -429,7 +428,7 @@ def initialize_pit(net):
         logger.warning("There are no nodes defined. "
                        "You need at least one node! "
                        "Without any nodes, you are not able to conduct a pipeflow!")
-        return
+
 
 def create_empty_pit(net):
     """Creates an empty internal structure which is called pit (pandapipes internal tables).
@@ -666,7 +665,7 @@ def _connectivity(net, branch_pit, node_pit, active_branch_lookup, active_node_l
         msg = "\n".join("In table %s: %s" % (tbl, nds) for tbl, nds in
                         get_table_index_list(net, node_pit, oos_nodes))
         logger.info("Setting the following nodes out of service in connectivity"
-                    " check:\n%s" % msg)
+                    " check:\n%s", msg)
 
     if len(is_nodes) > 0:
         node_type_message = "\n".join("In table %s: %s" % (tbl, nds) for tbl, nds in
@@ -677,8 +676,8 @@ def _connectivity(net, branch_pit, node_pit, active_branch_lookup, active_node_l
                 "although being out of service, which leads to an inconsistency in the connectivity"
                 " check!\n%s" % node_type_message)
         logger.info("Setting the following nodes back in service in connectivity"
-                    " check as they are connected to in_service branches:\n%s"
-                    % node_type_message)
+                    " check as they are connected to in_service branches:\n%s",
+                    node_type_message)
 
     return nodes_connected, branches_connected
 

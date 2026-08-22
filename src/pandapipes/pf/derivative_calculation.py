@@ -4,7 +4,7 @@ from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
 from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected, _sum_by_group, \
     branch_area
-from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup
+from pandapipes.pf.pipeflow_setup import get_net_option, get_lookup, PipeflowNotConverged
 from pandapipes.properties.fluids import get_fluid
 from pandapipes.properties.properties_toolbox import get_branch_real_density, get_branch_real_eta, get_branch_cp
 
@@ -219,8 +219,6 @@ def calc_lambda(m, eta, d, k, gas_mode, friction_model, lengths, options, area):
         re, lambda_laminar, lambda_nikuradse = calc_lambda_nikuradse_incomp(m, d, k, eta, area)
 
     if friction_model == "colebrook":
-        # TODO: move this import to top level if possible
-        from pandapipes.pf.pipeflow_setup import PipeflowNotConverged
         max_iter = options.get("max_iter_colebrook", 100)
         tolerance = options.get("tolerance_colebrook", 1e-4)
         converged, lambda_colebrook = colebrook(re, d, k, lambda_nikuradse, max_iter, lengths, tolerance)

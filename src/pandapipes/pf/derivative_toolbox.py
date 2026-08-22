@@ -24,7 +24,7 @@ def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init
     m_abs_deriv = np.maximum(m_init_abs, 1e-8)
     m_init2 = m_init_abs * branch_pit[:, IdxBranch.MDOTINIT]
     p_diff = p_init_i_abs - p_init_i1_abs
-    l = branch_pit[:, IdxBranch.LENGTH]
+    length = branch_pit[:, IdxBranch.LENGTH]
     lambd = branch_pit[:, IdxBranch.LAMBDA]
     lc = branch_pit[:, IdxBranch.LOSS_COEFFICIENT]
     pl = branch_pit[:, IdxBranch.PL]
@@ -32,11 +32,11 @@ def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init
     d = branch_pit[:, IdxBranch.D]
 
     const_height = rho * GRAVITATION_CONSTANT * height_difference / P_CONVERSION
-    friction_term = l * lambd / d + lc
+    friction_term = length * lambd / d + lc
     const_term = 1 / (area ** 2 * rho * P_CONVERSION * 2)
 
     df_dm = - const_term * (2 * m_abs_deriv * friction_term + der_lambda
-                            * l / d * m_init2)
+                            * length / d * m_init2)
 
     load_vec = p_diff + pl + const_height - const_term * m_init2 * friction_term
 

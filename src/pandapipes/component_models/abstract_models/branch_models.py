@@ -8,6 +8,7 @@ from pandapipes.component_models.abstract_models.base_component import Component
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.component_models.component_toolbox import build_pit_entries
 from pandapipes.pf.pipeflow_setup import get_net_option, get_table_number, get_lookup
+from pandapipes.pf.system_index import PitEntries
 
 try:
     import pandaplan.core.pplog as logging
@@ -65,7 +66,6 @@ class BranchComponent(Component):
 
     @classmethod
     def register_pit_branch_entries(cls, net, branch_pit, node_pit, registry) -> None:
-        from pandapipes.pf.system_index import PitEntries
         f, t = get_lookup(net, "branch", "from_to")[cls.table_name()]
         if not len(net[cls.table_name()]):
             return

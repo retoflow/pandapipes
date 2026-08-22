@@ -13,6 +13,7 @@ from pandapipes.component_models.component_toolbox import (
     build_pit_entries, p_correction_height_air, get_thermal_options,
 )
 from pandapipes.idx_node import IdxNode
+from pandapipes.pf.derivative_calculation import calculate_derivatives_node_thermal
 from pandapipes.pf.system_index import PitEntries, ComponentEquations, ThermVarEq
 from pandapipes.pf.pipeflow_setup import add_table_lookup, get_table_number, \
     get_lookup, get_net_option
@@ -101,8 +102,6 @@ class Junction(NodeComponent):
 
     @classmethod
     def register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry) -> None:
-        from pandapipes.pf.derivative_calculation import calculate_derivatives_node_thermal
-
         node_pit_old = net["_active_old_pit"]["node"]
 
         fn_node, dfn_dt = calculate_derivatives_node_thermal(

@@ -489,8 +489,7 @@ def colebrook_numba(re, d, k, lambda_nikuradse, max_iter, lengths, tolerance):
             lambda_cb[i] += step
 
             abs_step = abs(step)
-            if abs_step > max_step:
-                max_step = abs_step
+            max_step = max(max_step, abs_step)
 
         if max_step < tolerance:
             converged = True

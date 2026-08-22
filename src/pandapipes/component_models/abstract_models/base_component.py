@@ -105,11 +105,11 @@ class Component:
         pass
 
     @classmethod
-    def rerun_hydraulics(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def rerun_hydraulics(cls, net, branch_pit, node_pit, idx_lookups, options):  # pylint: disable=unused-argument
         return False
 
     @classmethod
-    def rerun_thermal(cls, net, branch_pit, node_pit, idx_lookups, options):
+    def rerun_thermal(cls, net, branch_pit, node_pit, idx_lookups, options):  # pylint: disable=unused-argument
         return False
 
     @classmethod

@@ -135,10 +135,10 @@ class Calculation:
         residual_norm = None
 
         while not net.converged and niter < max_iter:
-            logger.debug("niter %d" % niter)
+            logger.debug("niter %d", niter)
             results, residual, filtered = self.solve_step(net)
             residual_norm = np.max(np.abs(residual))
-            logger.debug("residual: %s" % residual_norm.round(4))
+            logger.debug("residual: %s", residual_norm.round(4))
 
             results = np.array(results, object)
             pos = np.arange(len(self.VARS) * 2)
@@ -164,7 +164,7 @@ class Calculation:
                             vals_old, filtered):
         if nonlinear_method == "automatic":
             errors_increased = set_damping_factor(net, niter, errors)
-            logger.debug("alpha: %s" % get_net_option(net, "alpha"))
+            logger.debug("alpha: %s", get_net_option(net, "alpha"))
             for error_increased, val, pit, col, f in zip(
                 errors_increased, vals_old, self.PITS, self.COLS, filtered
             ):
@@ -185,21 +185,21 @@ class Calculation:
             converged = error[niter] <= tol
             if not converged:
                 break
-            logger.debug("error_%s: %s" % (var, error[niter]))
+            logger.debug("error_%s: %s", var, error[niter])
         net.converged = converged and residual_norm <= tol_res
 
     def _log_final_results(self, net, niter, residual_norm, tols):
         logger.debug("--------------------------------------------------------------------------------")
         if not net.converged:
             logger.debug(
-                "Maximum number of iterations reached but %s solver did not converge." % self.MODE)
-            logger.debug("Norm of residual: %s" % residual_norm)
+                "Maximum number of iterations reached but %s solver did not converge.", self.MODE)
+            logger.debug("Norm of residual: %s", residual_norm)
         else:
             logger.debug("Calculation completed. Preparing results...")
-            logger.debug("Converged after %d iterations." % niter)
-            logger.debug("Norm of residual: %s" % residual_norm)
+            logger.debug("Converged after %d iterations.", niter)
+            logger.debug("Norm of residual: %s", residual_norm)
             for var, tol in zip(self.VARS, tols):
-                logger.debug("tolerance for %s: %s" % (var, tol))
+                logger.debug("tolerance for %s: %s", var, tol)
 
 
 class HydraulicCalculation(Calculation):

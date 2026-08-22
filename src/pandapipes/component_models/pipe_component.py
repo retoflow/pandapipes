@@ -16,11 +16,11 @@ from pandapipes.constants import NORMAL_TEMPERATURE, NORMAL_PRESSURE
 from pandapipes.idx_branch import IdxBranch
 from pandapipes.idx_node import IdxNode
 from pandapipes.pf.derivative_calculation import calculate_derivatives_hydraulic, calculate_derivatives_branch_thermal
-from pandapipes.pf.internals_toolbox import branch_area
+from pandapipes.pf.internals_toolbox import branch_area, get_from_nodes_corrected, get_to_nodes_corrected
 from pandapipes.pf.pipeflow_setup import get_fluid, get_lookup, get_net_option, get_table_number
 from pandapipes.pf.result_extraction import extract_branch_results_with_internals, \
     extract_branch_results_without_internals
-from pandapipes.pf.system_index import ComponentEquations, BaseSystemIndex, HydVarEq, ThermVarEq
+from pandapipes.pf.system_index import ComponentEquations, BaseSystemIndex, HydVarEq, PitEntries, ThermVarEq
 
 try:
     import pandaplan.core.pplog as logging
@@ -91,7 +91,6 @@ class Pipe(BranchWInternalsComponent):
 
     @classmethod
     def register_pit_node_entries(cls, net, node_pit, registry) -> None:
-        from pandapipes.pf.system_index import PitEntries
         super().register_pit_node_entries(net, node_pit, registry)
 
         table_lookup = get_lookup(net, "node", "table")
@@ -131,7 +130,6 @@ class Pipe(BranchWInternalsComponent):
 
     @classmethod
     def register_pit_branch_entries(cls, net, branch_pit, node_pit, registry) -> None:
-        from pandapipes.pf.system_index import PitEntries
         super().register_pit_branch_entries(net, branch_pit, node_pit, registry)
 
         f, t = get_lookup(net, "branch", "from_to")[cls.table_name()]
@@ -230,7 +228,6 @@ class Pipe(BranchWInternalsComponent):
     @classmethod
     def register_thermal_equations(cls, net, branch_pit, node_pit,
                                    sys_idx: BaseSystemIndex, registry) -> None:
-        from pandapipes.pf.internals_toolbox import get_from_nodes_corrected, get_to_nodes_corrected
         f, t = get_lookup(net, "branch", "from_to_active_heat_transfer")[cls.table_name()]
         branch_idx = np.arange(f, t, dtype=np.int32)
         if not len(branch_idx):

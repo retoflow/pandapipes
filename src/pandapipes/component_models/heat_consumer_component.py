@@ -105,8 +105,8 @@ class HeatConsumer(BranchWOInternalsComponent):
         mask_q0 = (qext == 0) & np.isnan(mdot)
         if np.any(mask_q0):
             logger.warning(r'qext_w is equals to zero for heat consumers with index %s. '
-                           r'Therefore, the defined temperature control cannot be maintained.'
-                           % tbl.index[mask_q0])
+                           r'Therefore, the defined temperature control cannot be maintained.',
+                           tbl.index[mask_q0])
 
     @classmethod
     def create_component_array(cls, net, component_pits):

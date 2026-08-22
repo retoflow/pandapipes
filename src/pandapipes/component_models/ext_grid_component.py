@@ -261,7 +261,6 @@ class ExtGrid(NodeElementComponent):
 
         res_table = net["res_" + cls.table_name()]
 
-        branch_pit = net['_pit']['branch']
         node_pit = net["_pit"]["node"]
 
         p_grids = np.isin(ext_grids.type.values, ["p", "pt"]) & ext_grids.in_service.values
@@ -276,4 +275,3 @@ class ExtGrid(NodeElementComponent):
         # to the same row, so Newton solves directly for the per-instance value) - no separate
         # averaging needed here.
         res_table["mdot_kg_per_s"].values[p_grids] = cls.sign() * node_pit[eg_nodes, IdxNode.MDOTSLACKINIT]
-        return res_table, ext_grids, node_pit, branch_pit
