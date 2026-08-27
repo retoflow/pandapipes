@@ -376,7 +376,6 @@ def initialize_pit(net):
     if (not get_net_option(net, "transient") or
             get_net_option(net, "simulation_time_step") == 0
     ):
-        create_lookups(net)
         if get_net_option(net, "mode") == "heat":
             if "_pit" not in net:
                 raise UserWarning("There are no hydraulic results given!")
