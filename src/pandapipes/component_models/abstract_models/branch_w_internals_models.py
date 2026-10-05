@@ -3,7 +3,6 @@
 # Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
 import numpy as np
-import pandas as pd
 
 from pandapipes.component_models.abstract_models.branch_models import BranchComponent
 from pandapipes.component_models.component_toolbox import get_internal_lookup_structure, build_pit_entries
@@ -161,17 +160,17 @@ class BranchWInternalsComponent(BranchComponent):
             def _rep(vals):
                 return np.repeat(vals, internal_branch_number) if has_internals else vals
 
-            d_vals = _rep(net[tbl].inner_diameter_mm.values / 1000.)
+            inner = net[tbl].inner_diameter_mm.values
+            d_vals = _rep(inner / 1000.)
             lc_vals = _rep(net[tbl].loss_coefficient.values)
             elem_idx_vals = _rep(net[tbl].index.values.astype(float))
             active_vals = _rep(net[tbl][cls.active_identifier()].values.astype(float))
 
             if "outer_diameter_mm" in net[tbl]:
+                # Anything the outer diameter leaves open falls back to the inner one.
                 outer = net[tbl].outer_diameter_mm.values.copy()
-                inner = net[tbl].inner_diameter_mm.values
-                outer[pd.isnull(outer)] = inner[pd.isnull(outer)]
+                outer[np.isnan(outer)] = inner[np.isnan(outer)]
                 do_vals = _rep(outer / 1000.)
-                do_vals[np.isnan(do_vals)] = d_vals[np.isnan(do_vals)]
             else:
                 do_vals = d_vals.copy()
 
