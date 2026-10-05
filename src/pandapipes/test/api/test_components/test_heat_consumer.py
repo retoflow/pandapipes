@@ -191,8 +191,8 @@ def test_heat_consumer_qext_zero():
 
 def test_heat_consumer_qe_tr_degenerate_ignores_stale_mdot():
     """Regression test: HeatConsumer._register_hydraulic_equations's QE_TR branch used to compute
-    the branch's own load (and, via an unrelated numpy view-aliasing accident in the node-balance
-    load construction a few lines further down, the pit's real MDOTINIT too) straight from
+    the branch's own residual (and, via an unrelated numpy view-aliasing accident in the node-balance
+    residual construction a few lines further down, the pit's real MDOTINIT too) straight from
     whatever mass flow happened to already be sitting in the pit for a degenerate row (t_out >=
     t_in, or qext_w == 0 - no valid mdot = qext/(cp*(t_in-t_out)) exists there). A prior working
     version reset MDOTINIT to 0 for exactly these rows before using it.
@@ -236,10 +236,10 @@ def test_heat_consumer_qe_tr_degenerate_ignores_stale_mdot():
     HeatConsumer.register_equations(net, branch_pit, node_pit, sys_idx, registry, mode="hydraulics")
 
     branch_eq_row = sys_idx.idx(HydVarEq.BRANCH, np.array([f], dtype=np.int32))[0]
-    load = next(eq.load_data[eq.load_rows == branch_eq_row][0]
-               for eq in registry.normal if np.any(eq.load_rows == branch_eq_row))
+    residual = next(eq.residual_data[eq.residual_rows == branch_eq_row][0]
+                   for eq in registry.default if np.any(eq.residual_rows == branch_eq_row))
 
-    assert load == 0.0
+    assert residual == 0.0
     assert branch_pit[f, IdxBranch.MDOTINIT] == 0.0
 
 def test_heat_consumer_result_extraction():

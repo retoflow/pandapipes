@@ -35,7 +35,7 @@ pandapipes which works as follows:
   the current guesses of *p* and *v*. In addition, the derivatives with respect to *p* and *v* are
   calculated.
 * The residual vectors and the derivatives of the components are stacked to a jacobian matrix and
-  a load vector from which a linear system of equations is derived internally and solved, thus
+  a residual vector from which a linear system of equations is derived internally and solved, thus
   deriving the next Newton step for *p* and *v*.
 
 In order to calculate the values correctly, some boundary conditions have to be given, which are:
@@ -81,7 +81,7 @@ Internal Structure
 
 As mentioned previously, the calculation is based on the pandapipes internal tables (pit) structure.
 The included node and branch arrays contain all the information necessary for :ref:`constructing the
-Jacobian matrix <jacobian>`, such as the load vectors and their derivatives. However, it is
+Jacobian matrix <jacobian>`, such as the residual vectors and their derivatives. However, it is
 important that only the really active parts of the network are considered. In order to simplify some
 of the calculations, an internal pit is created which does not contain the nodes and branches that
 were set out of service by the user or the :ref:`connectivity check <connectivity_check>`. It can be
@@ -114,8 +114,7 @@ and written to the branch pit. Then the system matrix is constructed which means
 derivatives are written into one large sparse matrix in which the row indices represent the node
 indices followed by the branch indices and the column indices represent the indices of the solution
 variables (typically they also belong to nodes and branches). It contains all the derivatives. The
-load vector (residual vector) is constructed by summarizing all the node related residuals from the
-branch pit at all nodes (e.g. incoming and outgoing mass flows) and appending the residuals
+residual vector is constructed by summarizing all the node related residuals from the branch pit at all nodes (e.g. incoming and outgoing mass flows) and appending the residuals
 calculated for the branches to it. The linearized system of equations for the hydraulic magnitudes
 in the end looks like this:
 
@@ -178,10 +177,10 @@ in the end looks like this:
     \end{bmatrix}
     \end{align*}
 
-In this formulation, *F* stands for the residual or load vector value, *n* is the number of nodes
+In this formulation, *F* stands for the residual vector value, *n* is the number of nodes
 and *b* the number of branches in the system. So the matrix on the left is the Jacobian matrix, the
 vector that it is multiplied with is the vector with the estimates' step and the vector on the right
-is the load vector.
+is the residual vector.
 
 .. note:: Normally the meshing in a network is rather low, so the coupling between nodes is rather \
           loose which means that most entries in the Jacobian matrix are in fact 0 and it can be \

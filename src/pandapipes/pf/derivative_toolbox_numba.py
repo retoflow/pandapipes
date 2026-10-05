@@ -44,12 +44,12 @@ NODE_PAMB = IdxNode.PAMB
 def derivatives_hydraulic_incomp_numba(branch_pit, der_lambda, p_init_i_abs, p_init_i1_abs,
                                        height_difference, rho, area):
     le = der_lambda.shape[0]
-    load_vec = np.zeros_like(der_lambda)
+    residual_vec = np.zeros_like(der_lambda)
     df_dm = np.zeros_like(der_lambda)
     df_dp = np.ones_like(der_lambda)
     df_dp1 = np.ones_like(der_lambda) * (-1)
-    load_vec_nodes_from = np.zeros_like(der_lambda)
-    load_vec_nodes_to = np.zeros_like(der_lambda)
+    residual_vec_nodes_from = np.zeros_like(der_lambda)
+    residual_vec_nodes_to = np.zeros_like(der_lambda)
     df_dm_nodes = np.ones_like(der_lambda)
     dp_frict_loss = np.zeros_like(der_lambda)
 
@@ -66,12 +66,12 @@ def derivatives_hydraulic_incomp_numba(branch_pit, der_lambda, p_init_i_abs, p_i
         df_dm[i] = -1. * const_term * (2 * m_abs_deriv * friction_term + der_lambda[i]
                                    * np.divide(branch_pit[i][BRANCH_LENGTH], branch_pit[i][BRANCH_D]) * m_init2)
 
-        load_vec[i] = p_diff + branch_pit[i][BRANCH_PL] + const_height - const_term * m_init2 * friction_term
+        residual_vec[i] = p_diff + branch_pit[i][BRANCH_PL] + const_height - const_term * m_init2 * friction_term
 
-        load_vec_nodes_from[i] = branch_pit[i][BRANCH_MDOTINIT]
-        load_vec_nodes_to[i] = branch_pit[i][BRANCH_MDOTINIT]
+        residual_vec_nodes_from[i] = branch_pit[i][BRANCH_MDOTINIT]
+        residual_vec_nodes_to[i] = branch_pit[i][BRANCH_MDOTINIT]
         dp_frict_loss[i] = const_term * m_init2 * friction_term
-    return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
+    return residual_vec, residual_vec_nodes_from, residual_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
 
 
 @jit((float64[:, :], float64[:, :], float64[:], float64[:], float64[:], float64[:], float64[:], float64[:],
@@ -79,12 +79,12 @@ def derivatives_hydraulic_incomp_numba(branch_pit, der_lambda, p_init_i_abs, p_i
 def derivatives_hydraulic_comp_numba(node_pit, branch_pit, lambda_, der_lambda, p_init_i_abs, p_init_i1_abs,
                                      height_difference, comp_fact, der_comp, der_comp1, rho, rho_n, area):
     le = lambda_.shape[0]
-    load_vec = np.zeros_like(lambda_)
+    residual_vec = np.zeros_like(lambda_)
     df_dm = np.zeros_like(lambda_)
     df_dp = np.zeros_like(lambda_)
     df_dp1 = np.zeros_like(lambda_)
-    load_vec_nodes_from = np.zeros_like(der_lambda)
-    load_vec_nodes_to = np.zeros_like(der_lambda)
+    residual_vec_nodes_from = np.zeros_like(der_lambda)
+    residual_vec_nodes_to = np.zeros_like(der_lambda)
     df_dm_nodes = np.ones_like(der_lambda)
     from_nodes = branch_pit[:, BRANCH_FROM_NODE].astype(np.int32)
     dp_frict_loss = np.zeros_like(der_lambda)
@@ -106,7 +106,7 @@ def derivatives_hydraulic_comp_numba(node_pit, branch_pit, lambda_, der_lambda, 
                         branch_pit[i][BRANCH_LOSS_COEFFICIENT]
         normal_term = np.divide(NORMAL_PRESSURE, NORMAL_TEMPERATURE * P_CONVERSION * rho_n[i] * area[i] ** 2)
 
-        load_vec[i] = p_diff + branch_pit[i][BRANCH_PL] + const_height \
+        residual_vec[i] = p_diff + branch_pit[i][BRANCH_PL] + const_height \
             - normal_term * comp_fact[i] * m_init2 * friction_term * p_sum_div * tm
 
         const_term = normal_term * m_init2 * friction_term * tm
@@ -123,10 +123,10 @@ def derivatives_hydraulic_comp_numba(node_pit, branch_pit, lambda_, der_lambda, 
         if m_init_abs <= 1e-8:
             df_dm[i] = 1.
 
-        load_vec_nodes_from[i] = branch_pit[i][BRANCH_MDOTINIT]
-        load_vec_nodes_to[i] = branch_pit[i][BRANCH_MDOTINIT]
+        residual_vec_nodes_from[i] = branch_pit[i][BRANCH_MDOTINIT]
+        residual_vec_nodes_to[i] = branch_pit[i][BRANCH_MDOTINIT]
         dp_frict_loss[i] = normal_term * comp_fact[i] * m_init2 * friction_term * p_sum_div * tm
-    return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
+    return residual_vec, residual_vec_nodes_from, residual_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
 
 
 @jit((float64[:, :], int32[:], int32[:]), nopython=True, cache=False)

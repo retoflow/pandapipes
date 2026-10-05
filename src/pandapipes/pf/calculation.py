@@ -112,8 +112,8 @@ class Calculation:
         :param net: the pandapipesNet to solve on
         :return: (results, residual, filtered) where results is a flat list of
                  [var1_new, var1_old, var2_new, var2_old, ...] (one pair per solver_var,
-                 in the same order as ``solver_vars``), residual is the raw load-vector
-                 residual, and filtered contains a row-index array (or None) per solver_var
+                 in the same order as ``solver_vars``), residual is the raw residual
+                 vector, and filtered contains a row-index array (or None) per solver_var
                  selecting which pit rows that var's damping-fallback should write back to.
         """
         raise NotImplementedError
@@ -348,7 +348,7 @@ def solve_bidirectional(net):
 def solve_hydraulics(net):
     """Create and solve the linearized system of equations to calculate hydraulic magnitudes.
 
-    Builds a jacobian (scipy sparse matrix) and load vector (numpy array) to calculate
+    Builds a jacobian (scipy sparse matrix) and residual vector (numpy array) to calculate
     pressure and velocity for the network nodes and branches.
 
     :param net: The pandapipesNet for which to solve the hydraulic matrix

@@ -106,13 +106,13 @@ class ConstFlow(NodeElementComponent):
         # equation positions node
         n_eq = sys_idx.idx(HydVarEq.NODE, index)
 
-        # load vector node
+        # residual vector node
         registry.add(ComponentEquations(
             rows=np.empty(0, dtype=np.int32),
             cols=np.empty(0, dtype=np.int32),
             data=np.empty(0, dtype=np.float64),
-            load_rows=n_eq.astype(np.int32),
-            load_data=loads_sum.astype(np.float64),
+            residual_rows=n_eq.astype(np.int32),
+            residual_data=loads_sum.astype(np.float64),
         ))
 
     @classmethod

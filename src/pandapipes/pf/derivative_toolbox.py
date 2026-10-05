@@ -38,19 +38,19 @@ def derivatives_hydraulic_incomp_np(branch_pit, der_lambda, p_init_i_abs, p_init
     df_dm = - const_term * (2 * m_abs_deriv * friction_term + der_lambda
                             * length / d * m_init2)
 
-    load_vec = p_diff + pl + const_height - const_term * m_init2 * friction_term
+    residual_vec = p_diff + pl + const_height - const_term * m_init2 * friction_term
 
     df_dp = np.ones_like(der_lambda)
     df_dp1 = np.ones_like(der_lambda) * (-1)
 
     df_dm_nodes = np.ones_like(der_lambda)
 
-    load_vec_nodes_from = branch_pit[:, IdxBranch.MDOTINIT]
-    load_vec_nodes_to = branch_pit[:, IdxBranch.MDOTINIT]
+    residual_vec_nodes_from = branch_pit[:, IdxBranch.MDOTINIT]
+    residual_vec_nodes_to = branch_pit[:, IdxBranch.MDOTINIT]
 
     dp_frict_loss = const_term * m_init2 * friction_term
 
-    return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
+    return residual_vec, residual_vec_nodes_from, residual_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
 
 
 def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_init_i_abs, p_init_i1_abs,
@@ -78,16 +78,16 @@ def derivatives_hydraulic_comp_np(node_pit, branch_pit, lambda_, der_lambda, p_i
                             np.divide(der_lambda * branch_pit[:, IdxBranch.LENGTH] * m_init2, branch_pit[:, IdxBranch.D]))
     df_dm[np.isclose(m_init_abs, 0)] = 1.
 
-    load_vec = p_diff + branch_pit[:, IdxBranch.PL] + const_height \
-               - const_term * comp_fact * m_init2 * friction_term * p_sum_div * tm
+    residual_vec = p_diff + branch_pit[:, IdxBranch.PL] + const_height \
+                   - const_term * comp_fact * m_init2 * friction_term * p_sum_div * tm
 
     df_dm_nodes = np.ones_like(lambda_)
 
-    load_vec_nodes_from = branch_pit[:, IdxBranch.MDOTINIT]
-    load_vec_nodes_to = branch_pit[:, IdxBranch.MDOTINIT]
+    residual_vec_nodes_from = branch_pit[:, IdxBranch.MDOTINIT]
+    residual_vec_nodes_to = branch_pit[:, IdxBranch.MDOTINIT]
     dp_frict_loss = const_term * comp_fact * m_init2 * friction_term * p_sum_div * tm
 
-    return load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
+    return residual_vec, residual_vec_nodes_from, residual_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss
 
 def derivatives_branch_thermal_np(branch_pit,
                                    branch_pit_old, branch_pit_old_lookup,

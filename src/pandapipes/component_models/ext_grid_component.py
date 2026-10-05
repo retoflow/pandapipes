@@ -130,7 +130,7 @@ class ExtGrid(NodeElementComponent):
             cls._register_thermal_equations(net, branch_pit, node_pit, sys_idx, registry)
 
     @classmethod
-    def _register_hydraulic_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
+    def _register_hydraulic_equations(cls, net, _, node_pit, sys_idx, registry):
         # register only for nodes that actually have an active ext_grid row - NOT every P-type
         # node in the system (a circ_pump also marks its own flow junction as NODE_TYPE=P purely
         # to anchor a pressure reference; that node is none of ExtGrid's business - it's handled
@@ -173,8 +173,8 @@ class ExtGrid(NodeElementComponent):
         rows_slack = slack_eq.astype(np.int32)
         cols_slack = p_col.astype(np.int32)
         data_slack = np.ones(len(slack_eq), dtype=np.float64)
-        load_rows_slack = slack_eq.astype(np.int32)
-        load_slack = np.zeros(len(slack_eq), dtype=np.float64)
+        residual_rows_slack = slack_eq.astype(np.int32)
+        residual_slack = np.zeros(len(slack_eq), dtype=np.float64)
 
         # equation position node
         n_eq = sys_idx.idx(HydVarEq.NODE, eg_nodes)
@@ -190,15 +190,15 @@ class ExtGrid(NodeElementComponent):
         rows_node = n_eq.astype(np.int32)
         cols_node = slack_col.astype(np.int32)
         data_node = np.ones(len(n_eq), dtype=np.float64)
-        load_rows_node = n_eq.astype(np.int32)
-        load_node = node_pit[eg_nodes, IdxNode.MDOTSLACKINIT].astype(np.float64)
+        residual_rows_node = n_eq.astype(np.int32)
+        residual_node = node_pit[eg_nodes, IdxNode.MDOTSLACKINIT].astype(np.float64)
 
         registry.add(ComponentEquations(
             rows=rows_slack,
             cols=cols_slack,
             data=data_slack,
-            load_rows=load_rows_slack,
-            load_data=load_slack,
+            residual_rows=residual_rows_slack,
+            residual_data=residual_slack,
             mode=EqWriteMode.MEAN,
         ))
 
@@ -206,8 +206,8 @@ class ExtGrid(NodeElementComponent):
             rows=rows_node,
             cols=cols_node,
             data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
+            residual_rows=residual_rows_node,
+            residual_data=residual_node,
         ))
 
     @classmethod
@@ -244,15 +244,15 @@ class ExtGrid(NodeElementComponent):
         rows_node = n_eq.astype(np.int32)
         cols_node = t_col.astype(np.int32)
         data_node = np.ones(len(n_eq), dtype=np.float64)
-        load_rows_node = n_eq.astype(np.int32)
-        load_node = np.zeros(len(n_eq), dtype=np.float64)
+        residual_rows_node = n_eq.astype(np.int32)
+        residual_node = np.zeros(len(n_eq), dtype=np.float64)
 
         registry.add_override(ComponentEquations(
             rows=rows_node,
             cols=cols_node,
             data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
+            residual_rows=residual_rows_node,
+            residual_data=residual_node,
             mode=EqWriteMode.MEAN,
         ))
 

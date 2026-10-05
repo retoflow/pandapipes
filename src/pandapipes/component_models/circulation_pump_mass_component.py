@@ -97,15 +97,15 @@ class CirculationPumpMass(CirculationPump):
         rows_branch = branch_eq.astype(np.int32)
         cols_branch = mdot_col.astype(np.int32)
         data_branch = np.ones(len(branch_idx), dtype=np.float64)
-        load_rows_branch = branch_eq.astype(np.int32)
-        load_branch = np.zeros(len(branch_idx), dtype=np.float64)
+        residual_rows_branch = branch_eq.astype(np.int32)
+        residual_branch = np.zeros(len(branch_idx), dtype=np.float64)
 
         registry.add_override(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
             data=data_branch,
-            load_rows=load_rows_branch,
-            load_data=load_branch,
+            residual_rows=residual_rows_branch,
+            residual_data=residual_branch,
             mode=EqWriteMode.UNIQUE,
         ))
 
@@ -134,15 +134,15 @@ class CirculationPumpMass(CirculationPump):
         rows_branch = branch_eq.astype(np.int32)
         cols_branch = branch_eq.astype(np.int32)
         data_branch = np.ones(len(branch_idx), dtype=np.float64)
-        load_rows_branch = branch_eq.astype(np.int32)
-        load_branch = np.zeros(len(branch_idx), dtype=np.float64)
+        residual_rows_branch = branch_eq.astype(np.int32)
+        residual_branch = np.zeros(len(branch_idx), dtype=np.float64)
 
         registry.add_override(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
             data=data_branch,
-            load_rows=load_rows_branch,
-            load_data=load_branch,
+            residual_rows=residual_rows_branch,
+            residual_data=residual_branch,
             mode=EqWriteMode.UNIQUE,
         ))
 

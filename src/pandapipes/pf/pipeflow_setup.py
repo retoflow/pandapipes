@@ -355,7 +355,7 @@ def _drop_pit_column(registry, col):
     :type col: int
     :return: No output
     """
-    for bucket in (registry.normal, registry.overrides):
+    for bucket in (registry.default, registry.overrides):
         for i, e in enumerate(bucket):
             keep = e.cols != col
             if not np.all(keep):

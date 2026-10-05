@@ -27,7 +27,7 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
     :param branch_pit_slice: view of the global branch pit for the component's active branches
     :param node_pit: global node internal table
     :param options: solver options dict (use_numba, friction_model, …)
-    :return: df_dm, df_dp, df_dp1, df_dm_nodes, load_vec, load_vec_nodes_from, load_vec_nodes_to
+    :return: df_dm, df_dp, df_dp1, df_dm_nodes, residual_vec, residual_vec_nodes_from, residual_vec_nodes_to
     """
     if options["use_numba"]:
         from pandapipes.pf.derivative_toolbox_numba import (
@@ -70,7 +70,7 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
     b_pit[:, IdxBranch.LAMBDA] = lambda_
 
     if not gas_mode:
-        load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss = (
+        residual_vec, residual_vec_nodes_from, residual_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss = (
             derivatives_hydraulic_incomp(b_pit, der_lambda, p_init_i_abs, p_init_i1_abs, height_difference, rho, area))
     else:
         rho_n = np.full(len(b_pit), fluid.get_density(NORMAL_TEMPERATURE))
@@ -78,13 +78,13 @@ def calculate_derivatives_hydraulic(net, branch_pit_slice, node_pit, options):
         dc = fluid.get_der_compressibility()
         der_comp = dc * der_p_m
         der_comp1 = dc * der_p_m1
-        load_vec, load_vec_nodes_from, load_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss = (
+        residual_vec, residual_vec_nodes_from, residual_vec_nodes_to, df_dm, df_dm_nodes, df_dp, df_dp1, dp_frict_loss = (
             derivatives_hydraulic_comp(node_pit, b_pit, lambda_, der_lambda, p_init_i_abs, p_init_i1_abs,
                 height_difference, comp_fact, der_comp, der_comp1, rho, rho_n, area))
 
     b_pit[:, IdxBranch.DP_FRICT_LOSS] = dp_frict_loss
 
-    return df_dm, df_dp, df_dp1, df_dm_nodes, load_vec, load_vec_nodes_from, load_vec_nodes_to
+    return df_dm, df_dp, df_dp1, df_dm_nodes, residual_vec, residual_vec_nodes_from, residual_vec_nodes_to
 
 
 def calculate_derivatives_branch_thermal(net, branch_pit_slice, node_pit, branch_pit_old_slice, options):

@@ -94,7 +94,7 @@ class CirculationPumpPressure(CirculationPump):
         rho = get_branch_real_density(fluid, node_pit, b_pit)
         height_diff = node_pit[fn, IdxNode.HEIGHT] - node_pit[tn, IdxNode.HEIGHT]
         const_height = rho * GRAVITATION_CONSTANT * height_diff / P_CONVERSION
-        load = p_from_abs - p_to_abs + b_pit[:, IdxBranch.PL] + const_height
+        residual = p_from_abs - p_to_abs + b_pit[:, IdxBranch.PL] + const_height
 
         # variables
         p_from_col = sys_idx.idx(HydVarEq.PINIT, fn)
@@ -103,19 +103,19 @@ class CirculationPumpPressure(CirculationPump):
         # equation position branch
         branch_eq = sys_idx.idx(HydVarEq.BRANCH, branch_idx)
 
-        # system matrix branch: 1 * δp_from - 1 * δp_to = load (override)
+        # system matrix branch: 1 * δp_from - 1 * δp_to = residual (override)
         rows_branch = np.concatenate([branch_eq, branch_eq]).astype(np.int32)
         cols_branch = np.concatenate([p_from_col, p_to_col]).astype(np.int32)
         data_branch = np.concatenate([np.ones(len(branch_idx)), -np.ones(len(branch_idx))]).astype(np.float64)
-        load_rows_branch = branch_eq.astype(np.int32)
-        load_branch = load.astype(np.float64)
+        residual_rows_branch = branch_eq.astype(np.int32)
+        residual_branch = residual.astype(np.float64)
 
         registry.add_override(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
             data=data_branch,
-            load_rows=load_rows_branch,
-            load_data=load_branch,
+            residual_rows=residual_rows_branch,
+            residual_data=residual_branch,
             mode=EqWriteMode.UNIQUE,
         ))
 
@@ -144,15 +144,15 @@ class CirculationPumpPressure(CirculationPump):
         rows_branch = branch_eq.astype(np.int32)
         cols_branch = branch_eq.astype(np.int32)
         data_branch = np.ones(len(branch_idx), dtype=np.float64)
-        load_rows_branch = branch_eq.astype(np.int32)
-        load_branch = np.zeros(len(branch_idx), dtype=np.float64)
+        residual_rows_branch = branch_eq.astype(np.int32)
+        residual_branch = np.zeros(len(branch_idx), dtype=np.float64)
 
         registry.add_override(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
             data=data_branch,
-            load_rows=load_rows_branch,
-            load_data=load_branch,
+            residual_rows=residual_rows_branch,
+            residual_data=residual_branch,
             mode=EqWriteMode.UNIQUE,
         ))
 

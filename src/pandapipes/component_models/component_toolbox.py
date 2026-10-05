@@ -35,7 +35,7 @@ def get_thermal_options(net):
     return {"use_numba": get_net_option(net, "use_numba")}
 
 
-def register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm_node, load_fn, load_tn):
+def register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm_node, residual_fn, residual_tn):
     """Register a branch's own mass flow (MDOTINIT) into both its from- and to-node balances.
 
     Feeds additively into both its from-node's and its to-node's mass-balance equation,
@@ -46,12 +46,12 @@ def register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm
 
     df_dm_node is always plain ones (see calculate_derivatives_hydraulic's own df_dm_nodes, or
     heat_consumer's np.ones_like(branch_idx)) - a unit of mdot change always changes a node's mass
-    balance by exactly that same unit - so the +1/-1 split is baked in here. load_fn/load_tn are
-    NOT re-signed here, unlike df_dm_node: callers must pass them already carrying whatever sign
-    their own upstream computation assigns (calculate_derivatives_hydraulic's callers pass
-    -load_fn/load_tn; heat_consumer, which derives load_fn = -MDOTINIT itself, passes load_fn/
-    load_tn unchanged) - this function only assembles the (row, col, data) COO triples and
-    registers them, it never touches the derivative math itself.
+    balance by exactly that same unit - so the +1/-1 split is baked in here. residual_fn/
+    residual_tn are NOT re-signed here, unlike df_dm_node: callers must pass them already carrying
+    whatever sign their own upstream computation assigns (calculate_derivatives_hydraulic's
+    callers pass -residual_fn/residual_tn; heat_consumer, which derives residual_fn = -MDOTINIT
+    itself, passes residual_fn/residual_tn unchanged) - this function only assembles the (row,
+    col, data) COO triples and registers them, it never touches the derivative math itself.
     """
     fn_eq = sys_idx.idx(HydVarEq.NODE, fn)
     tn_eq = sys_idx.idx(HydVarEq.NODE, tn)
@@ -59,15 +59,15 @@ def register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm
     rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
     cols_node = np.concatenate([mdot_col, mdot_col]).astype(np.int32)
     data_node = np.concatenate([-df_dm_node, df_dm_node]).astype(np.float64)
-    load_rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
-    load_node = np.concatenate([load_fn, load_tn]).astype(np.float64)
+    residual_rows_node = np.concatenate([fn_eq, tn_eq]).astype(np.int32)
+    residual_node = np.concatenate([residual_fn, residual_tn]).astype(np.float64)
 
     registry.add(ComponentEquations(
         rows=rows_node,
         cols=cols_node,
         data=data_node,
-        load_rows=load_rows_node,
-        load_data=load_node,
+        residual_rows=residual_rows_node,
+        residual_data=residual_node,
     ))
 
 
@@ -88,15 +88,15 @@ def register_branch_node_thermal_balance(sys_idx, registry, tn, t_tn_col, t_out_
     rows_node = np.concatenate([tn_eq, tn_eq]).astype(np.int32)
     cols_node = np.concatenate([t_tn_col, t_out_col]).astype(np.int32)
     data_node = np.concatenate([dfnt_dt, dfnt_dtout]).astype(np.float64)
-    load_rows_node = tn_eq.astype(np.int32)
-    load_node = fnt.astype(np.float64)
+    residual_rows_node = tn_eq.astype(np.int32)
+    residual_node = fnt.astype(np.float64)
 
     registry.add(ComponentEquations(
         rows=rows_node,
         cols=cols_node,
         data=data_node,
-        load_rows=load_rows_node,
-        load_data=load_node,
+        residual_rows=residual_rows_node,
+        residual_data=residual_node,
     ))
 
 
@@ -107,7 +107,7 @@ def register_circ_pump_node_continuity(net, branch_pit, sys_idx, registry, table
     equation of its own - it prescribes flow rather than deriving a pressure drop from
     friction (unlike calculate_derivatives_hydraulic's branch components) - so its
     contribution to both nodes' mass balance is just its own MDOTINIT flowing straight
-    through: d(mdot)/d(mdot) == 1, load = the branch's own signed mass flow. This was
+    through: d(mdot)/d(mdot) == 1, residual = the branch's own signed mass flow. This was
     duplicated near-identically in CirculationPumpMass's and CirculationPumpPressure's own
     _register_hydraulic_equations before being factored out here; the actual (row, col, data)
     assembly is register_branch_node_mass_balance's.
@@ -166,8 +166,8 @@ def register_circ_pump_slack_equations(net, branch_pit, node_pit, sys_idx, regis
         rows=slack_eq.astype(np.int32),
         cols=p_col.astype(np.int32),
         data=np.ones(len(slack_eq), dtype=np.float64),
-        load_rows=slack_eq.astype(np.int32),
-        load_data=np.zeros(len(slack_eq), dtype=np.float64),
+        residual_rows=slack_eq.astype(np.int32),
+        residual_data=np.zeros(len(slack_eq), dtype=np.float64),
         mode=EqWriteMode.MEAN,
     ))
 
@@ -188,8 +188,8 @@ def register_circ_pump_slack_equations(net, branch_pit, node_pit, sys_idx, regis
         rows=n_eq.astype(np.int32),
         cols=slack_col.astype(np.int32),
         data=np.ones(len(n_eq), dtype=np.float64),
-        load_rows=n_eq.astype(np.int32),
-        load_data=node_pit[force_zero, IdxNode.MDOTSLACKINIT].astype(np.float64),  # == 0. now
+        residual_rows=n_eq.astype(np.int32),
+        residual_data=node_pit[force_zero, IdxNode.MDOTSLACKINIT].astype(np.float64),  # == 0. now
     ))
 
 

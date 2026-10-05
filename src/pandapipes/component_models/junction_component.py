@@ -127,15 +127,15 @@ class Junction(NodeComponent):
         rows_node = n_eq.astype(np.int32)
         cols_node = t_n_col.astype(np.int32)
         data_node = dfn_dt[stagnant].astype(np.float64)
-        load_rows_node = n_eq.astype(np.int32)
-        load_node = fn_node[stagnant].astype(np.float64)
+        residual_rows_node = n_eq.astype(np.int32)
+        residual_node = fn_node[stagnant].astype(np.float64)
 
         registry.add(ComponentEquations(
             rows=rows_node,
             cols=cols_node,
             data=data_node,
-            load_rows=load_rows_node,
-            load_data=load_node,
+            residual_rows=residual_rows_node,
+            residual_data=residual_node,
         ))
 
     @classmethod

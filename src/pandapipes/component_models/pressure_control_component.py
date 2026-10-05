@@ -144,7 +144,7 @@ class PressureControlComponent(BranchWOInternalsComponent):
                 f"service: {ctrl_juncts[index_pc == -1]}"
             )
 
-        df_dm, df_dp, df_dp1, df_dm_node, load, load_fn, load_tn = (
+        df_dm, df_dp, df_dp1, df_dm_node, residual, residual_fn, residual_tn = (
             calculate_derivatives_hydraulic(net, b_pit, node_pit, get_hydraulic_options(net))
         )
 
@@ -152,10 +152,10 @@ class PressureControlComponent(BranchWOInternalsComponent):
         tn = b_pit[:, IdxBranch.TO_NODE].astype(np.int32)
 
         # Zero out branch equation contributions for ctrl_active branches (replaced by PC constraint)
-        df_dm[ctrl_active]  = 0.0
-        df_dp[ctrl_active]  = 0.0
-        df_dp1[ctrl_active] = 0.0
-        load[ctrl_active]   = 0.0
+        df_dm[ctrl_active]    = 0.0
+        df_dp[ctrl_active]    = 0.0
+        df_dp1[ctrl_active]   = 0.0
+        residual[ctrl_active] = 0.0
 
         # variables
         mdot_col   = sys_idx.idx(HydVarEq.MDOTINIT, branch_idx)
@@ -169,19 +169,19 @@ class PressureControlComponent(BranchWOInternalsComponent):
         rows_branch = np.concatenate([branch_eq, branch_eq, branch_eq]).astype(np.int32)
         cols_branch = np.concatenate([mdot_col, p_from_col, p_to_col]).astype(np.int32)
         data_branch = np.concatenate([df_dm, df_dp, df_dp1]).astype(np.float64)
-        load_rows_branch = branch_eq.astype(np.int32)
-        load_branch = load.astype(np.float64)
+        residual_rows_branch = branch_eq.astype(np.int32)
+        residual_branch = residual.astype(np.float64)
 
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
             data=data_branch,
-            load_rows=load_rows_branch,
-            load_data=load_branch,
+            residual_rows=residual_rows_branch,
+            residual_data=residual_branch,
         ))
 
         register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm_node,
-                                          -load_fn, load_tn)
+                                          -residual_fn, residual_tn)
 
         # Pressure constraint for ctrl_active branches: P_ctrl_node = P_target
         if np.any(ctrl_active):
@@ -195,8 +195,8 @@ class PressureControlComponent(BranchWOInternalsComponent):
                 rows=ca_branch_eq.astype(np.int32),
                 cols=p_ctrl_col.astype(np.int32),
                 data=np.ones(len(ca_branch_eq), dtype=np.float64),
-                load_rows=ca_branch_eq.astype(np.int32),
-                load_data=(p_ctrl_val - p_target).astype(np.float64),
+                residual_rows=ca_branch_eq.astype(np.int32),
+                residual_data=(p_ctrl_val - p_target).astype(np.float64),
             ))
 
     @classmethod
@@ -227,15 +227,15 @@ class PressureControlComponent(BranchWOInternalsComponent):
         rows_branch = np.concatenate([branch_eq, branch_eq]).astype(np.int32)
         cols_branch = np.concatenate([t_from_col, t_out_col]).astype(np.int32)
         data_branch = np.concatenate([dfb_dt, dfb_dtout]).astype(np.float64)
-        load_rows_branch = branch_eq.astype(np.int32)
-        load_branch = fb.astype(np.float64)
+        residual_rows_branch = branch_eq.astype(np.int32)
+        residual_branch = fb.astype(np.float64)
 
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
             data=data_branch,
-            load_rows=load_rows_branch,
-            load_data=load_branch,
+            residual_rows=residual_rows_branch,
+            residual_data=residual_branch,
         ))
 
         register_branch_node_thermal_balance(sys_idx, registry, tn, t_tn_col, t_out_col,

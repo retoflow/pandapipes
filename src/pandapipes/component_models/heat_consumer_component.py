@@ -167,16 +167,16 @@ class HeatConsumer(BranchWOInternalsComponent):
         # equation position branch
         branch_eq = sys_idx.idx(HydVarEq.BRANCH,   branch_idx)
 
-        # derivative and load vector branch
+        # derivative and residual vector branch
         df_dm = np.ones_like(branch_idx, dtype=np.float64)
-        load = np.zeros_like(branch_idx, dtype=np.float64)
+        residual = np.zeros_like(branch_idx, dtype=np.float64)
 
         mask_qe_dt = consumer_array[:, cls.MODE] == cls.QE_DT
         if np.any(mask_qe_dt):
             cp = get_branch_cp(get_fluid(net), node_pit, b_pit[mask_qe_dt])
             deltat = consumer_array[mask_qe_dt, cls.DELTAT]
             mdot = b_pit[mask_qe_dt, IdxBranch.QEXT] / (cp * deltat)
-            load[mask_qe_dt] = - mdot + b_pit[mask_qe_dt, IdxBranch.MDOTINIT]
+            residual[mask_qe_dt] = - mdot + b_pit[mask_qe_dt, IdxBranch.MDOTINIT]
 
         mask_qe_tr = consumer_array[:, cls.MODE] == cls.QE_TR
         if np.any(mask_qe_tr):
@@ -192,35 +192,36 @@ class HeatConsumer(BranchWOInternalsComponent):
             # A degenerate QE_TR consumer (t_out already >= t_in, or qext_w == 0) has no valid
             # mdot = qext/(cp*(t_in-t_out)) to solve for - reset MDOTINIT to 0 in the pit itself
             # (not just locally skip it) before it's read below, so a stale mass flow from a
-            # prior, non-degenerate iterate can't leak into this branch's own load (next line) or
-            # the node mass-balance load further down.
+            # prior, non-degenerate iterate can't leak into this branch's own residual (next line)
+            # or the node mass-balance residual further down.
             b_pit[mask_qe_tr & mask_ign, IdxBranch.MDOTINIT] = 0.
 
             df_dm[mask_qe_tr & ~mask_ign] = df_dm_qetr[mask_qe_tr & ~mask_ign]
-            load[mask_qe_tr] = (-b_pit[mask_qe_tr, IdxBranch.QEXT] + df_dm_qetr[mask_qe_tr] * b_pit[mask_qe_tr, IdxBranch.MDOTINIT])
+            residual[mask_qe_tr] = (-b_pit[mask_qe_tr, IdxBranch.QEXT] + df_dm_qetr[mask_qe_tr] * b_pit[mask_qe_tr, IdxBranch.MDOTINIT])
 
         # system matrix branch
         rows_branch = branch_eq.astype(np.int32)
         cols_branch = mdot_col.astype(np.int32)
         data_branch = df_dm.astype(np.float64)
-        load_rows_branch = branch_eq.astype(np.int32)
-        load_branch = load.astype(np.float64)
+        residual_rows_branch = branch_eq.astype(np.int32)
+        residual_branch = residual.astype(np.float64)
 
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
             data=data_branch,
-            load_rows=load_rows_branch,
-            load_data=load_branch,
+            residual_rows=residual_rows_branch,
+            residual_data=residual_branch,
             mode=EqWriteMode.UNIQUE,
         ))
 
-        # derivative and load vector node - no extra masking needed for degenerate QE_TR rows
-        # here, MDOTINIT was already reset to 0 in the pit above, so both loads read 0 there too
+        # derivative and residual vector node - no extra masking needed for degenerate QE_TR
+        # rows here, MDOTINIT was already reset to 0 in the pit above, so both residuals read 0
+        # there too
         df_dm_node = np.ones_like(branch_idx)
-        load = b_pit[:, IdxBranch.MDOTINIT]
+        mass = b_pit[:, IdxBranch.MDOTINIT]
         register_branch_node_mass_balance(sys_idx, registry, fn, tn, mdot_col, df_dm_node,
-                                          -load, load)
+                                          -mass, mass)
 
     @classmethod
     def _register_thermal_equations(cls, net, branch_pit, node_pit, sys_idx, registry):
@@ -264,7 +265,7 @@ class HeatConsumer(BranchWOInternalsComponent):
         # equation position branch
         branch_eq = sys_idx.idx(ThermVarEq.BRANCH, branch_idx)
 
-        # derivative and load vector branches
+        # derivative and residual vector branches
         mask_qe_tr = consumer_array[:, cls.MODE] == cls.QE_TR
         if np.any(mask_qe_tr):
             mask_ign = b_pit[:, IdxBranch.QEXT] == 0
@@ -277,15 +278,15 @@ class HeatConsumer(BranchWOInternalsComponent):
         rows_branch = np.concatenate([branch_eq, branch_eq]).astype(np.int32)
         cols_branch = np.concatenate([t_from_col, t_out_col]).astype(np.int32)
         data_branch = np.concatenate([dfb_dt, dfb_dtout]).astype(np.float64)
-        load_rows_branch = branch_eq.astype(np.int32)
-        load_branch = fb.astype(np.float64)
+        residual_rows_branch = branch_eq.astype(np.int32)
+        residual_branch = fb.astype(np.float64)
 
         registry.add(ComponentEquations(
             rows=rows_branch,
             cols=cols_branch,
             data=data_branch,
-            load_rows=load_rows_branch,
-            load_data=load_branch,
+            residual_rows=residual_rows_branch,
+            residual_data=residual_branch,
             mode=EqWriteMode.UNIQUE,
         ))
 
