@@ -176,6 +176,16 @@ def test_zero_flow_pipes(use_numba):
     assert net.res_junction.t_k.at[2] == 293.15
 
 
+def test_pipe_sections_nan(caplog):
+    """NaN in pipe sections is replaced by 1 and a warning is logged"""
+    from pandapipes.networks.simple_heat_transfer_networks import heat_transfer_delta
+    net = heat_transfer_delta()
+    net.pipe.at[0, "sections"] = np.nan
+    pandapipes.pipeflow(net)
+    assert net.pipe.sections.at[0] == 1
+    assert "number of sections is NaN" in caplog.text
+
+
 def test_create_pipe_sections_nan(caplog):
     """NaN in sections is replaced by 1 and a warning is logged already when the pipe is created"""
     caplog.set_level(logging.WARNING, logger="pandapipes.create")
